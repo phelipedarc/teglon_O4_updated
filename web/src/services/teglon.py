@@ -64,6 +64,13 @@ class Teglon:
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
         self.pickle_output_dir = pickle_output_dir
 
+        # Ensure the pickle cache dir exists. On a fresh install it may not, which
+        # otherwise crashes load_map when it writes N128_dict.pkl. Best-effort.
+        try:
+            os.makedirs(pickle_output_dir, exist_ok=True)
+        except OSError:
+            pass
+
 
     def compose_tile_query(self, detector_id, band_F99, extinct, healpix_map_id, tile_where, tile_aggregate,
                            tile_composed, num_tiles):
@@ -494,16 +501,292 @@ class Teglon:
         print("Extract Tiles execution time: %s" % (t2 - t1))
         print("********* end DEBUG ***********\n")
 
-    def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r",
-                    extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
+    # def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r",
+    #                 extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
+
+    #     is_error = False
+    #     nside128 = 128
+
+    #     # Set up external resource directories
+    #     utilities_base_dir = "/app/web/src/utilities"
+    #     pickle_output_dir = "%s/pickles/" % utilities_base_dir
+
+    #     detector_mapping = {
+    #         "s": "SWOPE",
+    #         "t": "THACHER",
+    #         "n": "NICKEL",
+    #         "t80": "T80S_T80S-Cam",
+    #         "nf": "NEWFIRM",
+    #         "a": "All"
+    #     }
+
+    #     detector_geography = {
+    #         "SWOPE": EarthLocation(lat=-29.0182 * u.deg, lon=-70.6926 * u.deg, height=2402 * u.m),
+    #         "THACHER": EarthLocation(lat=34.46479 * u.deg, lon=-121.6431 * u.deg, height=630.0 * u.m),
+    #         "NICKEL": EarthLocation(lat=37.3414 * u.deg, lon=-121.6429 * u.deg, height=1283 * u.m),
+    #         "T80S_T80S-Cam": EarthLocation(lat=-70.8035 * u.deg, lon=-70.8035 * u.deg, height=2207.0 * u.m),
+    #         "NEWFIRM": EarthLocation(lat=-30.16967 * u.deg, lon=70.80653 * u.deg, height=2207.0 * u.m),
+    #     }
+
+    #     band_mapping = {
+    #         "g": "SDSS g",
+    #         "r": "SDSS r",
+    #         "i": "SDSS i",
+    #         "z": "SDSS z",
+    #         "I": "Landolt I",
+    #         "J": "UKIRT J"
+    #     }
+
+    #     # Parameter checks
+    #     print("\n\n**************************\nChecking Parameters...")
+    #     if gw_id == "":
+    #         is_error = True
+    #         print("GWID is required.")
+
+    #     if band not in band_mapping:
+    #         is_error = True
+    #         print("Invalid band selection. Available bands: %s" % band_mapping.keys())
+
+    #     if tele not in detector_mapping:
+    #         is_error = True
+    #         print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+
+    #     if is_error:
+    #         print("\n\nErrors! See above output.")
+    #         print("Exiting...")
+    #         print("\n**************************")
+    #         return 1
+    #     else:
+    #         print("Checked!\n**************************")
+
+    #     formatted_healpix_dir = healpix_dir
+    #     formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
+
+    #     plot_all = True
+    #     if tele != "a":
+    #         plot_all = False
+
+    #     tile_files = {}
+    #     if plot_all:
+    #         # get each default tile file for each instrument.
+    #         default_tile_file_formatted = "{GWID}_{TELE_NAME}_4D_0.9_%s.txt" % healpix_file
+
+    #         for detect_key, detect_val in detector_mapping.items():
+    #             if detect_key != "a":
+    #                 tile_files[detect_val] = "%s/%s" % (formatted_healpix_dir, default_tile_file_formatted.format(
+    #                     GWID=gw_id, TELE_NAME=detect_val
+    #                 ))
+    #     else:
+    #         tile_files[detector_mapping[tele]] = "%s/%s" % (formatted_healpix_dir, tile_file)
+
+    #     # Create canvas
+    #     plot_axes = {}
+    #     ax_list = []
+    #     if plot_all:
+    #         fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2,
+    #                                                                  subplot_kw={'projection': 'astro hours mollweide'})
+    #         plt.tight_layout()
+
+    #         ax_list += [ax1, ax2, ax3, ax4, ax5, ax6]
+
+    #         for i, (detector_name, tile_file) in enumerate(tile_files.items()):
+    #             _ax = ax_list[i]
+    #             _ax.grid()
+    #             _ax.tick_params(axis='both', labelsize=5)
+    #             plot_axes[detector_name] = _ax
+
+    #         ax_list[-1].grid()
+    #         ax_list[-1].tick_params(axis='both', labelsize=5)
+    #     else:
+    #         fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'astro hours mollweide'})
+    #         ax.grid()
+    #         plot_axes[detector_mapping[tele]] = ax
+
+    #     # Generate all plottable assets
+    #     healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
+    #     healpix_map_result = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0]
+    #     healpix_map_id = int(healpix_map_result[0])
+    #     healpix_map_event_time = Time(healpix_map_result[2], format="gps")
+    #     healpix_map_nside = int(healpix_map_result[1])
+
+    #     select_pix = '''
+    #         SELECT
+    #             hp.id,
+    #             hp.HealpixMap_id,
+    #             hp.Pixel_Index,
+    #             hp.Prob,
+    #             hpc.NetPixelProb,
+    #             hp.Distmu,
+    #             hp.Distsigma,
+    #             hp.Mean,
+    #             hp.Stddev,
+    #             hp.Norm,
+    #             hp.N128_SkyPixel_id
+    #         FROM HealpixPixel hp 
+    #         JOIN HealpixPixel_Completeness hpc on hpc.HealpixPixel_id = hp.id
+    #         WHERE hp.HealpixMap_id = %s
+    #         ORDER BY hp.Pixel_Index;
+    #     '''
+
+    #     pixels_to_select = select_pix % healpix_map_id
+    #     map_pix_result = query_db([pixels_to_select])[0]
+
+    #     map_2d_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result}
+    #     map_4d_pix_dict = {int(mpr[2]): float(mpr[4]) for mpr in map_pix_result}
+
+    #     num_pix = hp.nside2npix(healpix_map_nside)
+    #     map_2d_pix = np.zeros(num_pix)
+    #     map_4d_pix = np.zeros(num_pix)
+
+    #     for i, mp in enumerate(map_2d_pix):  # same number of pix, re-use enumeration
+    #         if i in map_2d_pix_dict:
+    #             map_2d_pix[i] = map_2d_pix_dict[i]
+    #         if i in map_4d_pix_dict:
+    #             map_4d_pix[i] = map_4d_pix_dict[i]
+
+    #     _90_50_levels_2d = find_greedy_credible_levels(np.asarray(map_2d_pix))
+    #     _90_50_levels_4d = find_greedy_credible_levels(np.asarray(map_4d_pix))
+
+    #     # Plot Probability
+    #     for detector_name, plot_ax in plot_axes.items():
+    #         plot_ax.title.set_text(detector_name)
+    #         plot_ax.contourf_hpx(_90_50_levels_2d, cmap='OrRd', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.3)
+
+    #     # if plotting All telescopes
+    #     if plot_all:
+    #         ax_list[-1].title.set_text("Resampled 4D Probability")
+    #         ax_list[-1].contourf_hpx(_90_50_levels_4d, cmap='OrRd_r', levels=[0.0, 0.5, 0.9], linewidths=0.2,
+    #                                  alpha=0.75)
+
+    #     # Dust
+    #     print("\tLoading existing mwe...")
+    #     ebv = None
+    #     if os.path.exists(pickle_output_dir + "ebv.pkl"):
+    #         with open(pickle_output_dir + "ebv.pkl", 'rb') as handle:
+    #             ebv = pickle.load(handle)
+    #     else:
+    #         print('ebv.pkl does not exist! Creating...')
+    #         theta, phi = hp.pix2ang(nside=nside128, ipix=np.arange(hp.nside2npix(nside128)))
+    #         pix_coord = coord.SkyCoord(ra=np.rad2deg(phi), dec=np.rad2deg(0.5 * np.pi - theta), unit=(u.deg, u.deg))
+
+    #         print("Retrieving dust info")
+    #         sfd = SFDQuery()
+    #         ebv = sfd(pix_coord)
+
+    #         with open(pickle_output_dir + 'ebv.pkl', 'wb') as handle:
+    #             pickle.dump(ebv, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    #     for detector_name, plot_ax in plot_axes.items():
+    #         plot_ax.contour_hpx(ebv, colors='dodgerblue', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.5)
+    #         plot_ax.contourf_hpx(ebv, cmap='Blues', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.3)
+
+    #     # Sun
+    #     time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
+    #     theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
+    #     ra = np.rad2deg(phi)
+    #     dec = np.rad2deg(0.5 * np.pi - theta)
+    #     all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
+
+    #     # Pointings
+    #     detector_select_by_name = '''
+    #         SELECT
+    #             id, 
+    #             Name,
+    #             Deg_width,
+    #             Deg_height,
+    #             Deg_radius,
+    #             Area,
+    #             MinDec,
+    #             MaxDec,
+    #             ST_AsText(Poly)
+    #         FROM Detector 
+    #         WHERE Name='%s'
+    #     '''
+    #     for detector_name, tile_file in tile_files.items():
+
+    #         plot_ax = plot_axes[detector_name]
+
+    #         detector_result = query_db([detector_select_by_name % detector_name])[0][0]
+    #         detector_id = int(detector_result[0])
+    #         detector_name = detector_result[1]
+    #         detector_poly = detector_result[8]
+    #         detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
+
+    #         detector_obj = Detector(detector_name, detector_vertices, detector_id=detector_id)
+    #         tiles = Table.read(tile_file, format='ascii.ecsv')
+    #         tiles_to_plot = [Tile(ra, dec, detector=detector_obj, nside=healpix_map_nside,
+    #                               net_prob=prob) for ra, dec, prob in zip(tiles["RA"], tiles["Dec"], tiles["Prob"])]
+
+    #         if len(tiles_to_plot) > 0:
+    #             min_prob = np.min(tiles["Prob"])
+    #             max_prob = np.max(tiles["Prob"])
+    #             print("min prob for `%s`: %s" % (detector_name, min_prob))
+    #             print("max prob for `%s`: %s" % (detector_name, max_prob))
+    #             clr_norm = colors.LogNorm(min_prob, max_prob)
+    #             for i, t in enumerate(tiles_to_plot[0:num_tiles]):
+    #                 if t.ra_deg < 358 and t.ra_deg > 2:
+    #                     t.plot2(plot_ax, edgecolor='k',
+    #                             facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
+    #                             linewidth=0.05, alpha=1.0, zorder=9999)
+
+    #         # Sun Contours
+    #         try:
+    #             observatory = Observer(location=detector_geography[detector_name])
+    #             sun_set = observatory.sun_set_time(time_of_trigger, which='nearest', horizon=-18 * u.deg)
+    #             sun_rise = observatory.sun_rise_time(sun_set, which='next', horizon=-18 * u.deg)
+    #             sun_coord = get_sun(sun_set)
+    #             hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
+    #             time_next = sun_set
+
+    #             sun_separations = sun_coord.separation(all_sky_coords)
+    #             deg_sep = np.asarray([sp.deg for sp in sun_separations])
+
+    #             plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
+    #                                                  linewidths=0.2)
+    #             plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
+    #             plot_axes[detector_name].plot(sun_coord.ra.degree, sun_coord.dec.degree,
+    #                                           transform=plot_axes[detector_name].get_transform('world'), marker="o",
+    #                                           markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
+    #                                           linewidth=0.05)
+
+    #             # Airmass constraints
+    #             net_airmass = all_sky_coords.transform_to(
+    #                 AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
+    #             for i in np.arange(hours_of_the_night):
+    #                 time_next += timedelta(1 / 24.)
+    #                 temp = all_sky_coords.transform_to(
+    #                     AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
+    #                 temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
+    #                 net_airmass[temp_index] = 1.5
+
+    #             plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
+    #                                                   linewidths=0.2, alpha=0.3)
+    #             plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
+    #                                                   linewidths=0.2, alpha=0.3)
+    #         except Exception as e:
+    #             print("Failure in astroplan! Exception: %s" % e)
+    #             print("\n****** Proceeding without Sun Contours! *******\n")
+
+    #     output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
+    #     if not plot_all:
+    #         output_file = tile_file.split("/")[-1].replace(".txt", ".svg")
+
+    #     output_path = "%s/%s" % (formatted_healpix_dir, output_file)
+    #     fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
+    #     chmod_outputfile(output_path)
+    #     plt.close('all')
+    #     print("... Done.")
+
+    def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r", extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
+        #DARC MODIFICATION TO PRINT THE INFORMATIONS WHEN I RUN THE CODE OF PLOTTING
 
         is_error = False
         nside128 = 128
-
+    
         # Set up external resource directories
         utilities_base_dir = "/app/web/src/utilities"
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
-
+    
         detector_mapping = {
             "s": "SWOPE",
             "t": "THACHER",
@@ -512,7 +795,7 @@ class Teglon:
             "nf": "NEWFIRM",
             "a": "All"
         }
-
+    
         detector_geography = {
             "SWOPE": EarthLocation(lat=-29.0182 * u.deg, lon=-70.6926 * u.deg, height=2402 * u.m),
             "THACHER": EarthLocation(lat=34.46479 * u.deg, lon=-121.6431 * u.deg, height=630.0 * u.m),
@@ -520,7 +803,7 @@ class Teglon:
             "T80S_T80S-Cam": EarthLocation(lat=-70.8035 * u.deg, lon=-70.8035 * u.deg, height=2207.0 * u.m),
             "NEWFIRM": EarthLocation(lat=-30.16967 * u.deg, lon=70.80653 * u.deg, height=2207.0 * u.m),
         }
-
+    
         band_mapping = {
             "g": "SDSS g",
             "r": "SDSS r",
@@ -529,21 +812,21 @@ class Teglon:
             "I": "Landolt I",
             "J": "UKIRT J"
         }
-
+    
         # Parameter checks
         print("\n\n**************************\nChecking Parameters...")
         if gw_id == "":
             is_error = True
             print("GWID is required.")
-
+    
         if band not in band_mapping:
             is_error = True
             print("Invalid band selection. Available bands: %s" % band_mapping.keys())
-
+    
         if tele not in detector_mapping:
             is_error = True
             print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
-
+    
         if is_error:
             print("\n\nErrors! See above output.")
             print("Exiting...")
@@ -551,19 +834,19 @@ class Teglon:
             return 1
         else:
             print("Checked!\n**************************")
-
+    
         formatted_healpix_dir = healpix_dir
         formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
-
+    
         plot_all = True
         if tele != "a":
             plot_all = False
-
+    
         tile_files = {}
         if plot_all:
             # get each default tile file for each instrument.
             default_tile_file_formatted = "{GWID}_{TELE_NAME}_4D_0.9_%s.txt" % healpix_file
-
+    
             for detect_key, detect_val in detector_mapping.items():
                 if detect_key != "a":
                     tile_files[detect_val] = "%s/%s" % (formatted_healpix_dir, default_tile_file_formatted.format(
@@ -571,7 +854,7 @@ class Teglon:
                     ))
         else:
             tile_files[detector_mapping[tele]] = "%s/%s" % (formatted_healpix_dir, tile_file)
-
+    
         # Create canvas
         plot_axes = {}
         ax_list = []
@@ -579,29 +862,29 @@ class Teglon:
             fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3, 2,
                                                                      subplot_kw={'projection': 'astro hours mollweide'})
             plt.tight_layout()
-
+    
             ax_list += [ax1, ax2, ax3, ax4, ax5, ax6]
-
+    
             for i, (detector_name, tile_file) in enumerate(tile_files.items()):
                 _ax = ax_list[i]
                 _ax.grid()
                 _ax.tick_params(axis='both', labelsize=5)
                 plot_axes[detector_name] = _ax
-
+    
             ax_list[-1].grid()
             ax_list[-1].tick_params(axis='both', labelsize=5)
         else:
             fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'astro hours mollweide'})
             ax.grid()
             plot_axes[detector_mapping[tele]] = ax
-
+    
         # Generate all plottable assets
         healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
         healpix_map_result = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0]
         healpix_map_id = int(healpix_map_result[0])
         healpix_map_event_time = Time(healpix_map_result[2], format="gps")
         healpix_map_nside = int(healpix_map_result[1])
-
+    
         select_pix = '''
             SELECT
                 hp.id,
@@ -620,37 +903,93 @@ class Teglon:
             WHERE hp.HealpixMap_id = %s
             ORDER BY hp.Pixel_Index;
         '''
-
+    
         pixels_to_select = select_pix % healpix_map_id
         map_pix_result = query_db([pixels_to_select])[0]
-
+    
         map_2d_pix_dict = {int(mpr[2]): float(mpr[3]) for mpr in map_pix_result}
         map_4d_pix_dict = {int(mpr[2]): float(mpr[4]) for mpr in map_pix_result}
-
+    
         num_pix = hp.nside2npix(healpix_map_nside)
         map_2d_pix = np.zeros(num_pix)
         map_4d_pix = np.zeros(num_pix)
-
+    
         for i, mp in enumerate(map_2d_pix):  # same number of pix, re-use enumeration
             if i in map_2d_pix_dict:
                 map_2d_pix[i] = map_2d_pix_dict[i]
             if i in map_4d_pix_dict:
                 map_4d_pix[i] = map_4d_pix_dict[i]
-
+    
         _90_50_levels_2d = find_greedy_credible_levels(np.asarray(map_2d_pix))
         _90_50_levels_4d = find_greedy_credible_levels(np.asarray(map_4d_pix))
-
+    
+        # =====================================================================
+        # Sky Localization Area Calculation
+        # Calculate the area of the sky localization region for both 2D and 4D maps
+        # Following the procedure from: https://emfollow.docs.ligo.org/userguide/tutorial/skymaps.html
+        # =====================================================================
+    
+        print("\n\n**************************\nCalculating Sky Localization Areas...")
+    
+        # Calculate credible levels for 2D probability map
+        i_2d = np.flipud(np.argsort(map_2d_pix))
+        sorted_credible_levels_2d = np.cumsum(map_2d_pix[i_2d])
+        credible_levels_2d = np.empty_like(sorted_credible_levels_2d)
+        credible_levels_2d[i_2d] = sorted_credible_levels_2d
+    
+        # Calculate credible levels for 4D probability map
+        i_4d = np.flipud(np.argsort(map_4d_pix))
+        sorted_credible_levels_4d = np.cumsum(map_4d_pix[i_4d])
+        credible_levels_4d = np.empty_like(sorted_credible_levels_4d)
+        credible_levels_4d[i_4d] = sorted_credible_levels_4d
+    
+        # Calculate pixel area in square degrees
+        pixel_area_sq_deg = hp.nside2pixarea(healpix_map_nside, degrees=True)
+    
+        # Calculate sky localization areas for different credible levels
+        # For 2D map
+        area_2d_90 = np.sum(credible_levels_2d <= 0.9) * pixel_area_sq_deg
+        area_2d_50 = np.sum(credible_levels_2d <= 0.5) * pixel_area_sq_deg
+    
+        # For 4D map (resampled)
+        area_4d_90 = np.sum(credible_levels_4d <= 0.9) * pixel_area_sq_deg
+        area_4d_50 = np.sum(credible_levels_4d <= 0.5) * pixel_area_sq_deg
+    
+        # Print results
+        print(f"\n2D Sky Localization Area (Original):")
+        print(f"\t90% Credible Region: {area_2d_90:.2f} sq. deg")
+        print(f"\t50% Credible Region: {area_2d_50:.2f} sq. deg")
+    
+        print(f"\n4D Sky Localization Area (Resampled):")
+        print(f"\t90% Credible Region: {area_4d_90:.2f} sq. deg")
+        print(f"\t50% Credible Region: {area_4d_50:.2f} sq. deg")
+    
+        print("\n**************************\n")
+    
+        # Optional: Store results in a dictionary for later use
+        sky_localization_areas = {
+            "2d_90": area_2d_90,
+            "2d_50": area_2d_50,
+            "4d_90": area_4d_90,
+            "4d_50": area_4d_50,
+            "pixel_area": pixel_area_sq_deg,
+            "nside": healpix_map_nside
+        }
+    
+        # END Sky Localization Area Calculation
+        # =====================================================================
+    
         # Plot Probability
         for detector_name, plot_ax in plot_axes.items():
             plot_ax.title.set_text(detector_name)
             plot_ax.contourf_hpx(_90_50_levels_2d, cmap='OrRd', levels=[0.0, 0.5, 0.9], linewidths=0.2, alpha=0.3)
-
+    
         # if plotting All telescopes
         if plot_all:
             ax_list[-1].title.set_text("Resampled 4D Probability")
             ax_list[-1].contourf_hpx(_90_50_levels_4d, cmap='OrRd_r', levels=[0.0, 0.5, 0.9], linewidths=0.2,
                                      alpha=0.75)
-
+    
         # Dust
         print("\tLoading existing mwe...")
         ebv = None
@@ -661,25 +1000,25 @@ class Teglon:
             print('ebv.pkl does not exist! Creating...')
             theta, phi = hp.pix2ang(nside=nside128, ipix=np.arange(hp.nside2npix(nside128)))
             pix_coord = coord.SkyCoord(ra=np.rad2deg(phi), dec=np.rad2deg(0.5 * np.pi - theta), unit=(u.deg, u.deg))
-
+    
             print("Retrieving dust info")
             sfd = SFDQuery()
             ebv = sfd(pix_coord)
-
+    
             with open(pickle_output_dir + 'ebv.pkl', 'wb') as handle:
                 pickle.dump(ebv, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
+    
         for detector_name, plot_ax in plot_axes.items():
             plot_ax.contour_hpx(ebv, colors='dodgerblue', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.5)
             plot_ax.contourf_hpx(ebv, cmap='Blues', levels=[0.5, np.max(ebv)], linewidths=0.2, alpha=0.3)
-
+    
         # Sun
         time_of_trigger = Time(healpix_map_event_time.to_datetime(), scale="utc")
         theta, phi = hp.pix2ang(nside=64, ipix=np.arange(hp.nside2npix(64)))
         ra = np.rad2deg(phi)
         dec = np.rad2deg(0.5 * np.pi - theta)
         all_sky_coords = coord.SkyCoord(ra=ra, dec=dec, unit=(u.deg, u.deg))
-
+    
         # Pointings
         detector_select_by_name = '''
             SELECT
@@ -696,21 +1035,48 @@ class Teglon:
             WHERE Name='%s'
         '''
         for detector_name, tile_file in tile_files.items():
-
+    
             plot_ax = plot_axes[detector_name]
-
+    
             detector_result = query_db([detector_select_by_name % detector_name])[0][0]
             detector_id = int(detector_result[0])
             detector_name = detector_result[1]
             detector_poly = detector_result[8]
             detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
-
+    
             detector_obj = Detector(detector_name, detector_vertices, detector_id=detector_id)
             tiles = Table.read(tile_file, format='ascii.ecsv')
             tiles_to_plot = [Tile(ra, dec, detector=detector_obj, nside=healpix_map_nside,
                                   net_prob=prob) for ra, dec, prob in zip(tiles["RA"], tiles["Dec"], tiles["Prob"])]
-
+    
             if len(tiles_to_plot) > 0:
+    
+                # Hack
+                # circle = Detector.get_detector_vertices_circular(deg_radius=0.43)
+                # circle_grb = Detector.get_detector_vertices_circular(deg_radius=0.2)
+                # square = Detector.get_detector_vertices_rectangular(deg_width=0.86, deg_height=0.86)
+                #
+                # circle_detector = Detector(detector_name="Circle", detector_vertex_list_collection=circle)
+                # circle_detector_grb = Detector(detector_name="Circle", detector_vertex_list_collection=circle_grb)
+                #
+                #
+                # square_detector = Detector(detector_name="Square", detector_vertex_list_collection=square)
+                #
+                # circle_tile = Tile(central_ra_deg=149.16, central_dec_deg=-17.94, detector=circle_detector,
+                #                     nside=256,
+                #                     position_angle_deg=0.0)
+                #
+                # circle_tile_grb = Tile(central_ra_deg=16.0892, central_dec_deg=-12.1633, detector=circle_detector_grb,
+                #                    nside=256,
+                #                    position_angle_deg=0.0)
+                # # square_tile = Tile(central_ra_deg=149.16, central_dec_deg=-17.94, detector=square_detector,
+                # #                     nside=healpix_map_nside, position_angle_deg=0.0)
+                #
+                # circle_tile.plot2(plot_ax, edgecolor='b', facecolor='None', linestyle='-')
+                # circle_tile_grb.plot2(plot_ax, edgecolor='magenta', facecolor='None', linestyle='-')
+                # # square_tile.plot2(plot_ax, edgecolor='b', facecolor='None', linestyle='-')
+                # End Hack
+    
                 min_prob = np.min(tiles["Prob"])
                 max_prob = np.max(tiles["Prob"])
                 print("min prob for `%s`: %s" % (detector_name, min_prob))
@@ -718,10 +1084,19 @@ class Teglon:
                 clr_norm = colors.LogNorm(min_prob, max_prob)
                 for i, t in enumerate(tiles_to_plot[0:num_tiles]):
                     if t.ra_deg < 358 and t.ra_deg > 2:
+    
+                        # Hack
+                        # square_tile = Tile(central_ra_deg=t.ra_deg, central_dec_deg=t.dec_deg, detector=square_detector,
+                        #                     nside=healpix_map_nside, position_angle_deg=0.0)
+                        # square_tile.plot2(plot_ax, edgecolor='g', facecolor='None', linestyle='-', alpha=0.25)
+                        # End Hack
+    
                         t.plot2(plot_ax, edgecolor='k',
                                 facecolor=plt.cm.Greens(clr_norm(t.net_prob)),
                                 linewidth=0.05, alpha=1.0, zorder=9999)
-
+    
+    
+    
             # Sun Contours
             try:
                 observatory = Observer(location=detector_geography[detector_name])
@@ -730,10 +1105,10 @@ class Teglon:
                 sun_coord = get_sun(sun_set)
                 hours_of_the_night = int((sun_rise - sun_set).to_value('hr'))
                 time_next = sun_set
-
+    
                 sun_separations = sun_coord.separation(all_sky_coords)
                 deg_sep = np.asarray([sp.deg for sp in sun_separations])
-
+    
                 plot_axes[detector_name].contour_hpx(deg_sep, colors='darkorange', levels=[0, 60.0], alpha=0.5,
                                                      linewidths=0.2)
                 plot_axes[detector_name].contourf_hpx(deg_sep, colors='gold', levels=[0, 60.0], linewidths=0.2, alpha=0.3)
@@ -741,7 +1116,7 @@ class Teglon:
                                               transform=plot_axes[detector_name].get_transform('world'), marker="o",
                                               markersize=8, markeredgecolor="darkorange", markerfacecolor="gold",
                                               linewidth=0.05)
-
+    
                 # Airmass constraints
                 net_airmass = all_sky_coords.transform_to(
                     AltAz(obstime=sun_set, location=detector_geography[detector_name])).secz
@@ -751,7 +1126,7 @@ class Teglon:
                         AltAz(obstime=time_next, location=detector_geography[detector_name])).secz
                     temp_index = np.where((temp >= 1.0) & (temp <= 2.0))
                     net_airmass[temp_index] = 1.5
-
+    
                 plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[np.min(net_airmass), 1.0],
                                                       linewidths=0.2, alpha=0.3)
                 plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
@@ -759,11 +1134,11 @@ class Teglon:
             except Exception as e:
                 print("Failure in astroplan! Exception: %s" % e)
                 print("\n****** Proceeding without Sun Contours! *******\n")
-
+    
         output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
         if not plot_all:
             output_file = tile_file.split("/")[-1].replace(".txt", ".svg")
-
+    
         output_path = "%s/%s" % (formatted_healpix_dir, output_file)
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
         chmod_outputfile(output_path)
@@ -771,7 +1146,8 @@ class Teglon:
         print("... Done.")
 
     def load_map(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", analysis_mode=False,
-                 clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False, skip_newfirm=False):
+                 clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False, skip_newfirm=False,
+                 t_0_override=None):
 
         api_endpoint = "https://gracedb.ligo.org/api/"
         utilities_base_dir = "/app/web/src/utilities"
@@ -957,21 +1333,33 @@ class Teglon:
             try:
                 t1 = time.time()
 
-                gdb_client = GraceDb(api_endpoint)
-                event_json = gdb_client.superevent(gw_id).json()
-                far = event_json["far"]
-                t_0 = event_json["t_0"]
-                t_0_time_obj = Time(t_0, scale="utc", format="gps")
-                t_0_datetime_str = t_0_time_obj.to_value(format="iso")
-                gw_url = event_json["links"]["self"]
+                if os.path.exists(hpx_path) and t_0_override is not None:
+                    # Local skymap + explicit event time: skip GraceDB entirely. This enables
+                    # non-superevents (e.g. GW170817) and fully-offline/local maps. Backward
+                    # compatible: with the default t_0_override=None the GraceDB path below runs.
+                    print("Using local skymap `%s` and provided t_0=%s (skipping GraceDB)." % (
+                        hpx_path, t_0_override))
+                    far = None
+                    t_0 = float(t_0_override)
+                    t_0_time_obj = Time(t_0, scale="utc", format="gps")
+                    t_0_datetime_str = t_0_time_obj.to_value(format="iso")
+                    gw_url = ""
+                else:
+                    gdb_client = GraceDb(api_endpoint)
+                    event_json = gdb_client.superevent(gw_id).json()
+                    far = event_json["far"]
+                    t_0 = event_json["t_0"]
+                    t_0_time_obj = Time(t_0, scale="utc", format="gps")
+                    t_0_datetime_str = t_0_time_obj.to_value(format="iso")
+                    gw_url = event_json["links"]["self"]
 
-                # Download and save map file.
-                # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
-                #   in a search context
-                file_response = gdb_client.files(gw_id, healpix_file)
-                with open(hpx_path, "wb") as f:
-                    f.write(file_response.data)
-                chmod_outputfile(hpx_path)
+                    # Download and save map file.
+                    # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
+                    #   in a search context
+                    file_response = gdb_client.files(gw_id, healpix_file)
+                    with open(hpx_path, "wb") as f:
+                        f.write(file_response.data)
+                    chmod_outputfile(hpx_path)
 
                 # print("Downloading `%s`..." % healpix_file)
                 # t1 = time.time()

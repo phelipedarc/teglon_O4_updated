@@ -532,14 +532,17 @@ class Teglon:
                     instrument_url = 'instruments'
                     instrument_synopsis_request = {
                         "api_token": tm_api_token,
-                        "type": "photometric"
+                        # Treasure Map API change: `type` is now a numeric enum
+                        # (1 = photometric, 2 = spectroscopic), not the string
+                        # "photometric" (which now returns HTTP 400).
+                        "type": 1
                     }
                     instrument_list_target_url = "{}/{}?{}".format(tm_base_url, instrument_url,
                                                                    urllib.parse.urlencode(instrument_synopsis_request))
                     instrument_response = requests.get(url=instrument_list_target_url)
                     # instrument_result = [json.loads(r) for r in json.loads(instrument_response.text)]
                     instrument_result = [r for r in json.loads(instrument_response.text)]
-                    instrument_names_full = {ir["id"]: (ir["instrument_name"], ir['nickname']) for ir in
+                    instrument_names_full = {ir["id"]: (ir["instrument_name"], (ir['nickname'] or '')) for ir in
                                              instrument_result}
                     instrument_names = {}
                     for inst_id, inst_name_tuple in instrument_names_full.items():

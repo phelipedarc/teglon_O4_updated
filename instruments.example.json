@@ -1,0 +1,23 @@
+[
+  {
+    "name": "SWOPE",
+    "tm_detector_id": 0,
+    "teglon_detector_id": 0,
+    "detector_prefix": "S",
+    "detector_geometry": "rectangle",
+    "detector_width": 0.0,
+    "detector_height": 0.0,
+    "min_dec": -90.0,
+    "max_dec": 90.0
+  },
+  {
+    "name": "THACHER",
+    "tm_detector_id": 0,
+    "teglon_detector_id": 0,
+    "detector_prefix": "T",
+    "detector_geometry": "circle",
+    "detector_radius": 0.0,
+    "min_dec": -90.0,
+    "max_dec": 90.0
+  }
+]

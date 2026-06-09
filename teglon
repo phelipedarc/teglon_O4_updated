@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+#
+# Teglon-O4 Docker launcher.
+#
+# Runs the unified CLI inside the Docker network so it talks to the bundled MySQL
+# container directly -- no host port-forwarding / MySQL Workbench tunnel needed.
+#
+#   ./teglon up                       # start the database (detached)
+#   ./teglon run S230529ay            # full pipeline: load -> extract -> plot
+#   ./teglon extract S230529ay        # any CLI subcommand is forwarded as-is
+#   ./teglon --help                   # list all subcommands
+#   ./teglon down                     # stop the stack
+#   ./teglon logs                     # follow database logs
+#
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPOSE_DIR="${SCRIPT_DIR}/docker"
+ENV_FILE="${COMPOSE_DIR}/.env"
+COMPOSE_FILE="${COMPOSE_DIR}/docker-compose.yml"
+# Compose project name resolution, in priority order:
+#   1. COMPOSE_PROJECT_NAME exported in the shell
+#   2. COMPOSE_PROJECT_NAME set in docker/.env  (so a second instance "just works")
+#   3. the docker/ directory basename ("docker", the default single-instance project)
+# This keeps every ./teglon call pinned to ONE project, so it reuses the existing DB
+# container/network instead of trying to recreate it (which collides on the DB port).
+PROJECT="${COMPOSE_PROJECT_NAME:-}"
+if [[ -z "${PROJECT}" && -f "${ENV_FILE}" ]]; then
+  PROJECT="$(sed -n 's/^COMPOSE_PROJECT_NAME=//p' "${ENV_FILE}" | tail -1)"
+fi
+PROJECT="${PROJECT:-$(basename "${COMPOSE_DIR}")}"
+
+# Prefer `docker compose` (v2), fall back to `docker-compose` (v1).
+if docker compose version >/dev/null 2>&1; then
+  DC=(docker compose)
+else
+  DC=(docker-compose)
+fi
+
+if [[ ! -f "${ENV_FILE}" ]]; then
+  echo "Missing ${ENV_FILE}. Copy docker/.env.example to docker/.env and edit it." >&2
+  exit 1
+fi
+
+dc() { "${DC[@]}" -p "${PROJECT}" --env-file "${ENV_FILE}" -f "${COMPOSE_FILE}" "$@"; }
+
+cmd="${1:-}"
+case "${cmd}" in
+  up)
+    shift || true
+    dc up -d gw_db "$@"
+    echo "Database is starting. Run './teglon run <GWID>' once it is healthy."
+    ;;
+  down)
+    shift || true
+    dc down "$@"
+    ;;
+  logs)
+    shift || true
+    dc logs -f gw_db "$@"
+    ;;
+  dbshell)
+    # Open a MySQL shell inside the network (no host port needed).
+    dc exec gw_db mysql -uteglon -p teglon
+    ;;
+  ""|-h|--help|help)
+    dc run --rm teglon_cli --help
+    ;;
+  *)
+    # Forward everything to the CLI entrypoint inside the Docker network.
+    dc run --rm teglon_cli "$@"
+    ;;
+esac

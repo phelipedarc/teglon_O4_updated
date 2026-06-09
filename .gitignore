@@ -15,3 +15,5 @@ Settings.ini
 */events/*
 !*/events/README.md
 web/src/utilities/galaxy_catalog_files/*.dat
+
+.ipynb_checkpoints/

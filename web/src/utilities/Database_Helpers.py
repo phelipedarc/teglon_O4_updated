@@ -1,3 +1,4 @@
+import os
 import mysql.connector
 from mysql.connector import Error
 import MySQLdb as my
@@ -5,20 +6,37 @@ import MySQLdb as my
 from configparser import RawConfigParser
 import time
 import sys
-# import os
-# print(os.path.dirname(__file__))
 
-# configFile = '/opt/project/Settings.ini'
-configFile = 'Settings.ini'
-# configFile = '../Settings.ini'
+# Resolve the Settings.ini path: honor TEGLON_SETTINGS if set, otherwise look for a
+# `Settings.ini` next to the repo root (../../../ from this file) and fall back to CWD.
+_default_settings = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+    "Settings.ini",
+)
+configFile = os.environ.get("TEGLON_SETTINGS", _default_settings)
 config = RawConfigParser()
-config.read(configFile)
+config.read([configFile, "Settings.ini"])
 
-db_name = config.get('database', 'DATABASE_NAME')
-db_user = config.get('database', 'DATABASE_USER')
-db_pwd = config.get('database', 'DATABASE_PASSWORD')
-db_host = config.get('database', 'DATABASE_HOST')
-db_port = config.get('database', 'DATABASE_PORT')
+
+def _db_param(env_key, ini_key, default):
+    """Connection params resolve from the environment first, then Settings.ini, then a
+    Docker-friendly default. This lets the same code run inside the Docker network
+    (DATABASE_HOST=gw_db) or from the host (DATABASE_HOST=127.0.0.1, DATABASE_PORT=53306)
+    with no file edits and no port-forwarding/tunnel."""
+    val = os.environ.get(env_key)
+    if val:
+        return val
+    try:
+        return config.get("database", ini_key)
+    except Exception:
+        return default
+
+
+db_name = _db_param("DATABASE_NAME", "DATABASE_NAME", "teglon")
+db_user = _db_param("DATABASE_USER", "DATABASE_USER", "teglon")
+db_pwd = _db_param("DATABASE_PASSWORD", "DATABASE_PASSWORD", "4tegl0n123!!")
+db_host = _db_param("DATABASE_HOST", "DATABASE_HOST", "gw_db")
+db_port = int(_db_param("DATABASE_PORT", "DATABASE_PORT", "3306"))
 
 def bulk_upload(query):
     success = False
@@ -48,7 +66,7 @@ def query_db(query_list, commit=False):
     results = []
     try:
         chunk_size = 1e+6
-        db = my.connect(host=db_host, user=db_user, passwd=db_pwd, db=db_name, port=3306)
+        db = my.connect(host=db_host, user=db_user, passwd=db_pwd, db=db_name, port=db_port)
         cursor = db.cursor()
 
         query_count = len(query_list)

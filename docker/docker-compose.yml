@@ -1,7 +1,6 @@
-version: '2.4'
 services:
     gw_db:
-        container_name: teglon_db
+        container_name: ${DB_CONTAINER_NAME:-teglon_db}
         image: "mysql:8.0.25"
         mem_limit: ${MEM_LIMIT}
         ports:
@@ -52,3 +51,27 @@ services:
       environment:
         PYTHONPATH: /app
         DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
+    # Ephemeral service used by the `./teglon` wrapper to run the unified CLI inside
+    # the Docker network. It talks to gw_db directly (DATABASE_HOST=gw_db), so no host
+    # port-forwarding / MySQL Workbench tunnel is ever required.
+    teglon_cli:
+      platform: linux/amd64
+      build: ./teglon_worker
+      image: "ghcr.io/davecoulter/teglon_o4:latest"
+      mem_limit: ${MEM_LIMIT}
+      cpus: ${CPU_LIMIT}
+      working_dir: /app
+      entrypoint: ["python", "-m", "web.src.services.teglon_cli"]
+      volumes:
+        - ${VOL_APP}:/app
+        - ${VOL_DUSTMAPS}:/dustmaps
+      links:
+        - gw_db
+      environment:
+        PYTHONPATH: /app
+        DATABASE_HOST: gw_db
+        DATABASE_PORT: 3306
+        DUSTMAPS_CONFIG_FNAME: /dustmaps/dustmaps_config.json
+      depends_on:
+        gw_db:
+          condition: service_healthy

@@ -3,4 +3,14 @@ repo_url: https://github.com/davecoulter/teglon_O4/
 repo_name: davecoulter/teglon_O4
 theme:
   name: material
-
+nav:
+  - Home: index.md
+  - User guide (v2): user_guide_v2.md
+  - Installation: install.md
+  - First-time install (from scratch): first_time_install.md
+  - Quickstart: quickstart.md
+  - CLI reference: cli.md
+  - Configuration: configuration.md
+  - Database: database.md
+  - Fresh DB bootstrap: bootstrap.md
+  - Testing & validation: testing.md

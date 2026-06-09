@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "teglon-o4"
+version = "0.2.0"
+description = "LIGO O4-optimized Teglon: pixel-based gravitational-wave EM follow-up planner."
+readme = "README.md"
+requires-python = ">=3.9,<3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Dave Coulter", email = "dcoulter@ucsc.edu" }]
+keywords = ["gravitational-waves", "ligo", "healpix", "astronomy", "follow-up"]
+
+# Pinned to the known-good Docker environment (docker/teglon_worker/requirements.txt),
+# plus packages imported directly by the code but pulled in transitively there.
+dependencies = [
+    "multiprocess==0.70.14",
+    "numpy==1.23.5",
+    "astropy==5.2.2",
+    "healpy==1.16.2",
+    "ligo.skymap==1.0.7",
+    "scipy==1.10.1",
+    "beautifulsoup4==4.12.2",
+    "matplotlib==3.6.3",
+    "dustmaps==1.0.10",
+    "shapely==2.0.1",
+    "configparser==5.3.0",
+    "mysqlclient==2.1.1",
+    "mysql-connector-python==8.0.32",
+    "psutil==5.9.5",
+    "lxml==4.9.2",
+    "igwn-auth-utils==0.4.0",
+    "astroplan",
+    "ligo-gracedb",
+    "pytz",
+]
+
+[project.optional-dependencies]
+# Web/worker stack (Flask API + Celery). Only needed for the legacy HTTP/queue path.
+web = [
+    "gunicorn==20.1.0",
+    "Flask==2.2.3",
+    "celery[redis]==5.3.0",
+    "billiard==4.1.0",
+]
+# Basemap is heavy to build and only used by legacy plotting/integration scripts.
+legacy = [
+    "basemap==1.3.6",
+]
+
+[project.urls]
+Documentation = "https://teglon-04.readthedocs.io/en/latest/"
+Repository = "https://github.com/davecoulter/teglon_O4"
+
+[project.scripts]
+teglon = "web.src.services.teglon_cli:main"
+
+[tool.setuptools.packages.find]
+include = ["web*"]
