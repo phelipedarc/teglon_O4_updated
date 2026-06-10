@@ -135,8 +135,15 @@ to FITS (`web/events/<GWID>/<GWID>_4D_reweighted_<file>`). This is the
 benchmarked end-to-end path (see §6).
 ```bash
 ./teglon trigger S240413p
-./teglon trigger GW170817 --t0 1187008882.4   # local skymap + GPS time (non-superevents)
+./teglon trigger GW170817        # GraceDB 404 -> GWOSC fallback supplies the GPS time
 ```
+
+**GWOSC fallback.** If GraceDB has no match for the GW id, `load_map` automatically
+queries the GWOSC event API (`/eventapi/json/event/<NAME>/`) for the event GPS time
+and, where the catalog publishes one, the HEALPix FITS. GWTC-1 events (e.g.
+GW170817) publish posterior samples only, so place the FITS at
+`web/events/<GWID>/<file>` yourself — GWOSC still supplies the time, so no `--t0`
+is needed. `--t0 <gps>` remains available to skip all lookups (offline ingest).
 
 ### 4.5 `teglon compare <GWID>` — original vs Teglon-updated skymap
 Saves a side-by-side PDF and prints credible-region areas. **Physically correct:**

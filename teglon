@@ -64,10 +64,10 @@ case "${cmd}" in
     dc exec gw_db mysql -uteglon -p teglon
     ;;
   ""|-h|--help|help)
-    dc run --rm teglon_cli --help
+    dc run --rm -T teglon_cli --help
     ;;
   *)
     # Forward everything to the CLI entrypoint inside the Docker network.
-    dc run --rm teglon_cli "$@"
+    dc run --rm -T teglon_cli "$@"
     ;;
 esac

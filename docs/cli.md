@@ -35,18 +35,24 @@ These let you re-run one step without repeating the others.
 ### `teglon load-map <GWID>`
 Download + ingest a map (same `--skip-*`, `--analysis-mode`, `--no-clobber` flags as `run`).
 
-**Local skymaps / non-superevents.** GraceDB's superevent API only covers O3+
-superevents. For an older event (e.g. **GW170817**, which is not a superevent) or
-any offline map, place the FITS at `web/events/<GWID>/<healpix_file>` and pass the
-event GPS time with `--t0`; Teglon then skips the download and ingests the local
-file:
+**Non-superevents & the GWOSC fallback.** GraceDB's superevent API only covers O3+
+superevents. When GraceDB has no match for a GW id, `load_map` automatically falls
+back to the **GWOSC event API** (`https://gwosc.org/eventapi/json/event/<NAME>/`) to
+get the event GPS time (and a HEALPix FITS, for catalogs that publish one).
+
+- **Event GWOSC publishes a skymap for** (newer catalogs): everything is automatic —
+  `teglon trigger <GWID>` downloads the FITS and uses the GWOSC GPS time.
+- **GWTC-1 events (e.g. GW170817):** GWOSC publishes posterior samples only, not a
+  HEALPix FITS. Place the FITS yourself at `web/events/<GWID>/<healpix_file>` and run
+  normally — GWOSC still supplies the GPS time, so **no `--t0` is needed**:
 
 ```bash
-# GW170817 bayestar map already saved to web/events/GW170817/bayestar.fits.gz
-teglon load-map GW170817 --t0 1187008882.4
+# GW170817 bayestar map saved to web/events/GW170817/bayestar.fits.gz
+teglon trigger GW170817        # GraceDB 404 -> GWOSC supplies GPS=1187008882.4
 ```
 
-`--t0` is also accepted by `run` and `trigger`.
+You can still pass `--t0 <gps>` explicitly (on `run`/`load-map`/`trigger`) to skip
+all lookups for a fully-offline ingest.
 
 ### `teglon extract <GWID>`
 Produce ranked tile lists from an already-ingested map. Adds a box filter:

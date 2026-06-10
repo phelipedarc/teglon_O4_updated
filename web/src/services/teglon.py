@@ -53,6 +53,51 @@ def initialize_tile(tile):
     # tile.query_polygon_string
     return tile
 
+
+def fetch_gwosc_event(gw_id, gwosc_base="https://gwosc.org/eventapi/json"):
+    """Look up an event on the GWOSC event API by common name.
+
+    Used as a fallback when GraceDB has no match for `gw_id` (e.g. GWTC-1 events
+    such as GW170817, which are not GraceDB superevents). Returns a dict
+    {gps, skymap_url, gracedb_id, jsonurl} for the event's preferred version, or
+    None if GWOSC has no record.
+
+    GWOSC always provides the event GPS time. It serves a HEALPix FITS skymap only
+    for catalogs that publish one (newer catalogs do); GWTC-1 publishes posterior
+    samples only, so `skymap_url` is None there and a local skymap must be supplied.
+    """
+    url = "%s/event/%s/" % (gwosc_base.rstrip("/"), gw_id)
+    try:
+        resp = requests.get(url, timeout=30)
+        if resp.status_code != 200:
+            return None
+        events = (resp.json() or {}).get("events", {})
+    except Exception as e:
+        print("GWOSC lookup error for `%s`: %s" % (gw_id, e))
+        return None
+
+    if not events:
+        return None
+
+    # The /event/<name>/ endpoint returns the single preferred (latest) version.
+    ev = list(events.values())[0]
+
+    skymap_url = None
+    for pdict in (ev.get("parameters") or {}).values():
+        if isinstance(pdict, dict):
+            data_url = str(pdict.get("data_url") or "")
+            if data_url.lower().endswith((".fits", ".fits.gz")):
+                skymap_url = data_url
+                break
+
+    return {
+        "gps": ev.get("GPS"),
+        "skymap_url": skymap_url,
+        "gracedb_id": ev.get("gracedb_id"),
+        "jsonurl": ev.get("jsonurl"),
+    }
+
+
 class Teglon:
     def __init__(self):
         configFile = './Settings.ini'
@@ -1345,21 +1390,50 @@ class Teglon:
                     t_0_datetime_str = t_0_time_obj.to_value(format="iso")
                     gw_url = ""
                 else:
-                    gdb_client = GraceDb(api_endpoint)
-                    event_json = gdb_client.superevent(gw_id).json()
-                    far = event_json["far"]
-                    t_0 = event_json["t_0"]
+                    far = None
+                    t_0 = None
+                    gw_url = ""
+                    try:
+                        gdb_client = GraceDb(api_endpoint)
+                        event_json = gdb_client.superevent(gw_id).json()
+                        far = event_json["far"]
+                        t_0 = event_json["t_0"]
+                        gw_url = event_json["links"]["self"]
+
+                        # Download and save map file.
+                        # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date
+                        #   flat file in a search context
+                        file_response = gdb_client.files(gw_id, healpix_file)
+                        with open(hpx_path, "wb") as f:
+                            f.write(file_response.data)
+                        chmod_outputfile(hpx_path)
+                    except Exception as gdb_err:
+                        # GraceDB has no match (e.g. GWTC-1 events like GW170817, which are
+                        # not superevents). Fall back to the GWOSC event API for the GPS time
+                        # (+ a HEALPix FITS if GWOSC publishes one for this catalog).
+                        print("GraceDB lookup failed for `%s` (%s). Trying GWOSC..." % (gw_id, gdb_err))
+                        gwosc = fetch_gwosc_event(gw_id)
+                        if gwosc is None or gwosc.get("gps") is None:
+                            print("No GWOSC record for `%s` either. Exiting..." % gw_id)
+                            return 1
+                        t_0 = float(t_0_override) if t_0_override is not None else float(gwosc["gps"])
+                        gw_url = gwosc.get("jsonurl") or ""
+                        print("GWOSC match: %s  GPS=%s  gracedb_id=%s" % (
+                            gw_id, gwosc.get("gps"), gwosc.get("gracedb_id")))
+                        if not os.path.exists(hpx_path):
+                            if gwosc.get("skymap_url"):
+                                print("Downloading skymap from GWOSC: %s" % gwosc["skymap_url"])
+                                urllib.request.urlretrieve(gwosc["skymap_url"], hpx_path)
+                                chmod_outputfile(hpx_path)
+                            else:
+                                print("GWOSC has no HEALPix skymap for `%s` (posterior samples "
+                                      "only). Place the FITS at `%s` and re-run." % (gw_id, hpx_path))
+                                return 1
+                        else:
+                            print("Using local skymap `%s` with GWOSC t_0=%s." % (hpx_path, t_0))
+
                     t_0_time_obj = Time(t_0, scale="utc", format="gps")
                     t_0_datetime_str = t_0_time_obj.to_value(format="iso")
-                    gw_url = event_json["links"]["self"]
-
-                    # Download and save map file.
-                    # The default healpix_file - "bayestar.fits.gz" always has the most up-to-date flat file
-                    #   in a search context
-                    file_response = gdb_client.files(gw_id, healpix_file)
-                    with open(hpx_path, "wb") as f:
-                        f.write(file_response.data)
-                    chmod_outputfile(hpx_path)
 
                 # print("Downloading `%s`..." % healpix_file)
                 # t1 = time.time()
