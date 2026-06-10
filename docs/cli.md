@@ -25,7 +25,7 @@ Full pipeline for one event: **load-map → extract → plot**.
 | `--skip-swope/--skip-thacher/--skip-t80/--skip-newfirm` | off | Don't register those tiles |
 
 ```bash
-teglon run S230529ay --tele a --cum-prob 0.9 --num-tiles 500
+teglon run S240413p --tele a --cum-prob 0.9 --num-tiles 500
 ```
 
 ## Individual stages

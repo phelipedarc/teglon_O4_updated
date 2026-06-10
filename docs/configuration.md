@@ -32,7 +32,7 @@ This is what makes the same code run anywhere without edits:
 export DATABASE_HOST=127.0.0.1
 export DATABASE_PORT=53306
 export DATABASE_PASSWORD=...
-teglon extract S230529ay
+teglon extract S240413p
 ```
 
 You can also point `Settings.ini` somewhere else with `TEGLON_SETTINGS=/path/to/Settings.ini`.

@@ -57,17 +57,22 @@ Highlights of this version:
 ```bash
 git clone https://github.com/phelipedarc/teglon_O4_updated.git
 cd teglon_O4_updated
+git checkout darcTeglon                 # the updated branch (don't skip this)
 
 cp docker/.env.example docker/.env      # set VOL_APP, VOL_DB, VOL_DUSTMAPS, DB_PWD
 cp Settings.example.ini Settings.ini    # set your Treasure Map API token
 
 ./teglon up                             # start the bundled MySQL database
-./teglon trigger S240413p               # GW ID → re-weighted skymap (~2 min)
+# first time only — build the database once (see Installation below):
+./teglon setup --run                    # GLADE + initialize + pickles (~45–63 min)
+
+./teglon trigger S240413p               # GW ID → re-weighted skymap (~2–4 min)
 ./teglon extract S240413p               # ranked tiles per telescope
 ./teglon compare S240413p               # side-by-side 2D-vs-4D PDF
 ```
 
-Outputs land in `web/events/S240413p/`. `./teglon --help` lists everything.
+Outputs land in `web/events/S240413p/`. `./teglon --help` lists everything. Full
+step-by-step first-time install: [docs/first_time_install.md](docs/first_time_install.md).
 
 ## Installation
 
@@ -79,7 +84,7 @@ Two supported paths (full detail in [docs/first_time_install.md](docs/first_time
   database with `DATABASE_HOST`/`DATABASE_PORT` env vars. Extras: `.[web]` (Flask/Celery),
   `.[legacy]` (basemap).
 
-**First-time database build (once, ~49 min on a fast multi-core host):**
+**First-time database build (once, ~45–63 min depending on host I/O):**
 
 ```bash
 # after configuring docker/.env + Settings.ini:

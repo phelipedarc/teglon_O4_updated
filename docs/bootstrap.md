@@ -1,4 +1,10 @@
-# Fresh DB bootstrap
+# Fresh DB bootstrap (advanced)
+
+> **Most users want `teglon setup --run`** — the complete, recommended one-command
+> database build (GLADE → `initialize_teglon` → pickle caches). Follow
+> [First-time install](first_time_install.md). This page documents the lower-level
+> `bootstrap` command, a partial helper (dust + GLADE + optional detectors) kept for
+> advanced/manual use.
 
 If you are starting from an **empty** database (rather than the pre-populated
 `DATABASE/` volume), you need to load the science data once: the dust map, the

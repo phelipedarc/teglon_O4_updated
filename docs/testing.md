@@ -26,21 +26,22 @@ A canonical end-to-end check using three landmark events:
 
 | Event | GraceDB id | Notes |
 |-------|-----------|-------|
-| GW170817 | `GW170817` (event G298048) | Not a superevent → use a local skymap + `--t0 1187008882.4` |
+| GW170817 | `GW170817` (event G298048) | Not a superevent → local skymap; **GWOSC fallback** supplies the event time automatically |
 | GW190425 | `S190425z` | Public superevent (downloaded from GraceDB) |
 | GW190814 | `S190814bv` | Public superevent (downloaded from GraceDB) |
 
 For each event the test runs the observational pipeline and the comparison:
 
 ```bash
-# GW170817: place web/events/GW170817/bayestar.fits.gz first, then:
-./teglon load-map GW170817 --t0 1187008882.4
+# GW170817: place a FITS at web/events/GW170817/bayestar.fits.gz first, then
+# (GraceDB 404 -> Teglon falls back to the GWOSC event API for the GPS time):
+./teglon trigger GW170817
 ./teglon extract GW170817
 ./teglon compare GW170817        # side-by-side 2D vs 4D PDF + area metrics
 
 # GW190425 / GW190814 (downloaded automatically):
-./teglon load-map S190425z && ./teglon extract S190425z && ./teglon compare S190425z
-./teglon load-map S190814bv && ./teglon extract S190814bv && ./teglon compare S190814bv
+./teglon trigger S190425z && ./teglon extract S190425z && ./teglon compare S190425z
+./teglon trigger S190814bv && ./teglon extract S190814bv && ./teglon compare S190814bv
 ```
 
 The `compare` step prints the 50%/90% credible-region areas for the original

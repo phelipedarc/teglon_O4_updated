@@ -4,8 +4,8 @@ This is the complete, copy-pasteable path for someone who has **never used Teglo
 and starts from an **empty folder** with nothing installed. It ends by running the
 real O4 event **S240413p**.
 
-> Times below are from a clone-based test run. The one-time database build
-> (step 6) is the long part (~2–3 hours); the per-event run (step 7) is ~2 minutes.
+> Measured end-to-end from a fresh `git clone`: the one-time database build
+> (step 6) takes **~45–63 min**; afterwards a per-event run (step 7) is **~2–4 min**.
 
 ---
 
@@ -30,10 +30,13 @@ mkdir -p "$TEGLON_BASE" "$TEGLON_DATA/DATABASE" "$TEGLON_DATA/DUST_MAP"
 
 ```bash
 cd "$TEGLON_BASE"
-git clone https://github.com/davecoulter/teglon_O4.git
-cd teglon_O4
-git checkout ZiggyTeglon          # branch with the unified CLI + fixes
+git clone https://github.com/phelipedarc/teglon_O4_updated.git
+cd teglon_O4_updated
+git checkout darcTeglon            # the branch with the unified CLI + all updates
 ```
+
+> The updated code lives on the **`darcTeglon`** branch — don't skip the
+> `git checkout`, or you'll get the old upstream code.
 
 ## 2. Configure
 
@@ -42,7 +45,7 @@ cp docker/.env.example docker/.env
 ```
 Edit `docker/.env` and set (absolute paths!):
 ```bash
-VOL_APP=<$TEGLON_BASE>/teglon_O4
+VOL_APP=<$TEGLON_BASE>/teglon_O4_updated
 VOL_DB=<$TEGLON_DATA>/DATABASE
 VOL_DUSTMAPS=<$TEGLON_DATA>/DUST_MAP
 DB_PWD=<choose-a-strong-password>
@@ -63,7 +66,7 @@ Edit `Settings.ini` → `[treasuremap] TM_API_TOKEN: rX-<your token>` (keep the
 cd web/src/utilities/galaxy_catalog_files
 wget http://glade.elte.hu/GLADE_2.4.txt
 mv GLADE_2.4.txt GLADE_2.4.dat        # the file MUST be named exactly GLADE_2.4.dat
-cd "$TEGLON_BASE/teglon_O4"
+cd "$TEGLON_BASE/teglon_O4_updated"
 ```
 
 ## 4. Fetch the SFD dust maps (~130 MB, once)
@@ -83,7 +86,7 @@ This downloads `SFD_dust_4096_ngp/sgp.fits` into your `VOL_DUSTMAPS` folder.
 On first start the schema, stored procedures and users load automatically. Wait a
 few seconds until the container is healthy (`docker ps` shows `(healthy)`).
 
-## 6. Build the database — ONE TIME (~2–3 hours)
+## 6. Build the database — ONE TIME (~45–63 min)
 
 ```bash
 ./teglon setup --run
@@ -93,6 +96,12 @@ E(B-V), galaxy↔pixel associations, completeness, static tile grids) **→ pick
 caches**. It needs a valid `TM_API_TOKEN` for the Treasure Map detector step.
 
 > Run `./teglon setup` (without `--run`) first to print the plan without executing.
+
+> **Old way (v1.0):** the same build, by hand, was three commands run via the
+> `gw_script` service — `bulk_upload_glade.py`, then `initialize_teglon.py` (with
+> all `--build_*` flags), then `build_init_pickles.py`. `setup --run` simply chains
+> them. Full old↔new mapping is in the
+> [User Guide](user_guide_v2.md#3-old--new-command-equivalence) — both still work.
 
 ## 7. Use it — run S240413p end to end
 
@@ -129,14 +138,16 @@ All-in-one planning pipeline (load → extract → plot) is also available:
   `mysqldump` of their `teglon` schema and restore it into your `VOL_DB` instance
   (`./teglon up`, then `mysql … < dump.sql`). Minutes instead of hours.
 - **Non-superevents / offline maps** (e.g. GW170817, which isn't on public
-  GraceDB): place the FITS at `web/events/<GWID>/bayestar.fits.gz` and pass the
-  event GPS time: `./teglon load-map <GWID> --t0 <gps_seconds>`.
+  GraceDB): place the FITS at `web/events/<GWID>/<file>`, then run normally —
+  Teglon automatically falls back to the **GWOSC** event API for the event time
+  (`./teglon trigger GW170817 --healpix-file <file>`). No `--t0` needed (it stays
+  available for a fully offline ingest).
 - **Multiple instances on one host:** set distinct `LOCAL_DB_PORT`,
   `DB_CONTAINER_NAME`, and `COMPOSE_PROJECT_NAME` in `docker/.env`.
 
-### What was verified in testing
-Steps 1–2, 5, and 7 were run end-to-end (S240413p: ~124 s GW-ID→reweighted skymap).
-Step 6 was validated through GLADE upload + sky pixels + detectors (and the
-Treasure Map API fix); the later `initialize_teglon` stages were not run to full
-completion in the test session. Step 3 reflects the documented GLADE download;
-step 4 runs the existing `initialize_dust.py`.
+### What was verified
+The entire flow (steps 1–7) was run end-to-end from a fresh `git clone` of the
+fork: the full `setup --run` completed (GLADE + all `initialize_teglon` stages +
+pickles) in ~60 min with no hang, and five benchmark events ran successfully
+(GW ID → reweighted skymap in ~2–4 min, incl. GW170817 via the GWOSC fallback).
+See the [benchmark report](benchmark_report.md).

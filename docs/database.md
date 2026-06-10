@@ -45,8 +45,8 @@ To open a shell against the DB without any host port:
 When the `teglon_db` container starts with an **empty** data directory, MySQL
 auto-runs the mounted SQL in `docker/db_init/` in order: schema, the `angsep`
 function, `BackupTables`/`DeleteMap` stored procedures, and the users. To then
-fill the science data (dust, galaxies, detectors, static grids), run
-[`teglon bootstrap`](bootstrap.md).
+fill the science data (galaxies, dust, detectors, static grids), run
+[`teglon setup --run`](first_time_install.md) once (~45–63 min).
 
 If you mount an already-populated `DATABASE/` volume, none of that is needed and
 you can go straight to [`teglon run <GWID>`](quickstart.md).

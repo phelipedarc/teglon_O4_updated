@@ -1,5 +1,5 @@
 # Teglon O4 — User Documentation
-**Version:** 2.0 | **Branch:** ZiggyTeglon | **Updated:** June 2026
+**Version:** 2.0 | **Branch:** darcTeglon (fork) | **Updated:** June 2026
 
 This version keeps **everything from v1.0 working** and adds a single `teglon`
 command, a Docker wrapper, environment-based configuration (no port-forwarding),
@@ -126,7 +126,7 @@ Dry-run by default; `--run` executes. Chains GLADE → `initialize_teglon` (all
 flags) → `build_init_pickles` — i.e. the entire v1.0 sections 5–6 in one command.
 ```bash
 ./teglon setup            # print the plan
-./teglon setup --run      # build the DB from scratch (~2–3 h)
+./teglon setup --run      # build the DB from scratch (~45–63 min)
 ```
 
 ### 4.4 `teglon trigger <GWID>` — GW ID → re-weighted skymap
@@ -235,12 +235,14 @@ know exactly what was and wasn't exercised:
    `web/src/utilities/galaxy_catalog_files/` — a symlink to a host path **fails
    inside the container** (it isn't mounted). Place the real file there.
 5. **GW170817 ingested from a local skymap.** GW170817 isn't on public GraceDB
-   (it's not a superevent), so its BAYESTAR map was downloaded from the public DCC
-   archive and ingested with `./teglon load-map GW170817 --t0 1187008882.4`.
-6. **From-scratch `setup` not run to completion.** It was validated through GLADE
-   + sky pixels + detectors + the Treasure Map fix, then stopped. The later
-   `initialize_teglon` stages (MWE, associations, completeness, static grids) and
-   the pickle step were not run end-to-end in the test session.
+   (it's not a superevent), so its FITS was provided locally. The **GWOSC fallback**
+   now supplies the event time automatically — `./teglon trigger GW170817` works
+   with no `--t0`.
+
+The from-scratch `setup --run` was **subsequently validated end-to-end** from a
+fresh `git clone` of the fork: all `initialize_teglon` stages + pickles completed
+(~60 min, no hang), and five benchmark events ran successfully. See the
+[benchmark report](benchmark_report.md).
 
 ---
 

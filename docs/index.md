@@ -20,21 +20,27 @@ Essential Teglon functions
 
 ## Getting started
 
-The whole pipeline runs from a single command. With Docker:
+Once installed, the whole pipeline runs from a single command. With Docker:
 
 ```bash
-./teglon up                 # start the bundled MySQL database
-./teglon run S230529ay      # download map -> rank tiles -> plot, for one GW event
+./teglon up                  # start the bundled MySQL database
+./teglon trigger S240413p    # GW ID -> ingest + galaxy-reweight -> updated skymap
+./teglon extract S240413p    # ranked tiles per telescope
+./teglon compare S240413p    # side-by-side 2D-vs-4D PDF
 ```
 
-Outputs land in `web/events/S230529ay/` (per-telescope tile lists `*.txt` and an
-all-sky plan `all_telescopes_4D_0.9_bayestar.fits.gz.svg`).
+Outputs land in `web/events/S240413p/`. `./teglon --help` lists every command.
 
-Next steps:
+**New here? Start with:**
+
+* [User Guide](user_guide_v2.md) — the complete guide (features, **old↔new command map**, benchmarks)
+* [First-time install](first_time_install.md) — from an empty folder, step by step
+* [CLI reference](cli.md) — every subcommand and option
+
+More:
 
 * [Installation](install.md) — Docker and pip
 * [Quickstart](quickstart.md) — run your first event end-to-end
-* [CLI reference](cli.md) — every subcommand and option
 * [Configuration](configuration.md) — env vars vs `Settings.ini`
 * [Database](database.md) — how the data fits together (and why no port-forwarding is needed)
-* [Fresh DB bootstrap](bootstrap.md) — build the database from scratch
+* [Benchmark report](benchmark_report.md) — install + per-event timings

@@ -14,36 +14,45 @@ required.**
 ### Prerequisites
 
 * Docker + Docker Compose v2 (`docker compose version`)
-* The SFD dust map files under your `DUST_MAP/` directory (already present in a
-  standard checkout)
+* A Treasure Map API token (free from <https://treasuremap.space>)
+* The GLADE catalog + SFD dust maps are **fetched during setup** (not shipped) —
+  the full first-time walkthrough is in [First-time install](first_time_install.md).
 
 ### Setup
 
 ```bash
-git clone https://github.com/davecoulter/teglon_O4.git
-cd teglon_O4
+git clone https://github.com/phelipedarc/teglon_O4_updated.git
+cd teglon_O4_updated
+git checkout darcTeglon       # the updated branch (don't skip this)
 
 # 1. Configure paths/credentials
 cp docker/.env.example docker/.env
 $EDITOR docker/.env          # set VOL_APP, VOL_DB, VOL_DUSTMAPS, DB_PWD
 
 cp Settings.example.ini Settings.ini
-$EDITOR Settings.ini         # set your Treasure Map API token (DB creds are optional here)
+$EDITOR Settings.ini         # set your Treasure Map API token
 
 # 2. Start the database (first start auto-loads the schema + stored procedures)
 ./teglon up
 
-# 3. Run a GW event end-to-end
-./teglon run S230529ay
+# 3. FIRST TIME ONLY: build the database (~45–63 min). Needs GLADE + dust maps —
+#    see First-time install for the GLADE download + dust fetch.
+./teglon setup --run
+
+# 4. Run a GW event end-to-end
+./teglon run S240413p
 ```
 
 The `./teglon` wrapper forwards any subcommand to the CLI inside the network:
 
 ```bash
 ./teglon --help
-./teglon extract S230529ay --cum-prob 0.9 --num-tiles 500
+./teglon extract S240413p --cum-prob 0.9 --num-tiles 500
 ./teglon down                # stop the stack when finished
 ```
+
+> New to Teglon? Follow [First-time install](first_time_install.md) — it's the
+> complete copy-pasteable path from an empty folder, including the GLADE + dust steps.
 
 ## Option B — pip (host install)
 
@@ -68,7 +77,7 @@ export DATABASE_USER=teglon
 export DATABASE_PASSWORD=...      # your DB password
 export DATABASE_NAME=teglon
 
-teglon run S230529ay
+teglon run S240413p
 ```
 
 !!! note "Native scientific dependencies"

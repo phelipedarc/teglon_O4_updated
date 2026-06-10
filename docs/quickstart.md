@@ -10,14 +10,17 @@ This walks through planning observations for a single gravitational-wave event.
 
 This starts the `teglon_db` MySQL container. On its very first start it
 auto-loads the schema, stored procedures (`BackupTables`, `DeleteMap`), and
-users from `docker/db_init/*.sql`. If you are using the pre-populated
-`DATABASE/` volume, the galaxies, dust, detectors, and static grids are already
-there.
+users from `docker/db_init/*.sql`.
+
+> **First time?** The database still needs its science data (galaxies, dust,
+> detectors, static grids). Build it once with `./teglon setup --run` — see
+> [First-time install](first_time_install.md). The steps below assume that's done
+> (or that you mounted an already-built `DATABASE/` volume).
 
 ## 2. Run the full pipeline
 
 ```bash
-./teglon run S230529ay
+./teglon run S240413p
 ```
 
 `run` performs three stages in order (no Celery/queue needed):
@@ -35,11 +38,11 @@ there.
 Everything is written under the event directory:
 
 ```
-web/events/S230529ay/
+web/events/S240413p/
 ├── bayestar.fits.gz                                   # the downloaded map
-├── S230529ay_SWOPE_4D_0.9_bayestar.fits.gz.txt        # ranked tiles (ECSV)
-├── S230529ay_THACHER_4D_0.9_bayestar.fits.gz.txt
-├── S230529ay_NICKEL_4D_0.9_bayestar.fits.gz.txt       # galaxy-targeted list
+├── S240413p_SWOPE_4D_0.9_bayestar.fits.gz.txt        # ranked tiles (ECSV)
+├── S240413p_THACHER_4D_0.9_bayestar.fits.gz.txt
+├── S240413p_NICKEL_4D_0.9_bayestar.fits.gz.txt       # galaxy-targeted list
 ├── ...
 └── all_telescopes_4D_0.9_bayestar.fits.gz.svg         # the observation plan
 ```
@@ -52,14 +55,14 @@ and a header recording every parameter used.
 
 ```bash
 # Only one telescope, custom coverage and tile count
-./teglon run S230529ay --tele s --cum-prob 0.9 --num-tiles 300
+./teglon run S240413p --tele s --cum-prob 0.9 --num-tiles 300
 
 # Skip the plot (just the tile lists)
-./teglon run S230529ay --no-plot
+./teglon run S240413p --no-plot
 
 # Re-extract with different settings without re-downloading the map
-./teglon extract S230529ay --prob-type 2D --extinct 0.3
-./teglon plot S230529ay
+./teglon extract S240413p --prob-type 2D --extinct 0.3
+./teglon plot S240413p
 ```
 
 See the [CLI reference](cli.md) for every option.
