@@ -105,15 +105,20 @@ Full docs (mkdocs): start with the **[User Guide v2](docs/user_guide_v2.md)**.
 
 ## Performance (measured)
 
-Full from-scratch install ≈ **49 min** (one-time). Then per event:
+Full from-scratch install (clone the fork → ready-to-run) ≈ **45–63 min** one-time
+(I/O-load dependent). Then, per event:
 
-| | GW ID → reweighted skymap (`trigger`) | full plan (trigger+extract+plot+compare) |
+| Event | GW ID → reweighted skymap (`trigger`) | full plan (trigger+extract+plot+compare) |
 | --- | --- | --- |
-| S240413p | 119 s | ~164 s |
-| S190814bv | 143 s | ~191 s |
-| GW170817 (via GWOSC) | 281 s¹ | ~357 s |
+| GW190425 (S190425z) | 178 s | ~234 s |
+| GW190814 (S190814bv) | 139 s | ~191 s |
+| S240413p | 120 s | ~163 s |
+| S231206cc | 257 s | ~305 s |
+| GW170817 (MCMC map + GWOSC) | 142 s | ~187 s |
 
-¹ GW170817's input map is NSIDE 2048 (50 M pixels), hence slower. See
+Benchmarked on a fresh from-scratch build of the fork. GW170817 used a local
+`MCMC_TF2_LowSpin_AllSky.fits` with the GWOSC fallback supplying the event time —
+its galaxy-reweighting shrinks the 90% region **33×** (12.2 → 0.37 deg²). See
 [the benchmark report](docs/benchmark_report.md) for the full breakdown.
 
 ## License

@@ -181,25 +181,30 @@ galaxy-reweighted skymap, via `trigger`:
 time ./teglon trigger S240413p
 ```
 
-**Measured (clone-based test install, 8 CPUs):**
+**Measured** on a fresh from-scratch build of the fork (5 events; full numbers and
+the from-scratch install timing in [benchmark_report.md](benchmark_report.md)):
 
-| Step | Time |
+| Event | `trigger` (GW ID → reweighted skymap) |
 | --- | --- |
-| Download `bayestar.fits.gz` from GraceDB | 3.2 s |
-| Ingest + galaxy-reweight + export FITS | ~120 s |
-| **Total (`trigger`)** | **123.8 s (~2 min)** |
+| S240413p | 120 s |
+| GW190814 (S190814bv) | 139 s |
+| GW170817 (MCMC + GWOSC) | 142 s |
+| GW190425 (S190425z) | 178 s |
+| S231206cc | 257 s |
 
-Output: `web/events/S240413p/S240413p_4D_reweighted_bayestar.fits.gz`.
+(Of which ~3 s is the GraceDB download; the rest is ingest + galaxy-reweight +
+export. The full from-scratch install is ~45–63 min, one-time.)
 
-For reference, the `compare` step quantifies the localization improvement
-(normalized 90% credible region):
+The `compare` step quantifies the localization improvement (normalized 90% credible
+region) on the same build:
 
 | Event | Prob → galaxies | 2D 90° | Teglon 90° | shrink |
 | --- | --: | --: | --: | --: |
-| GW170817 | 0.910 | 22.5 deg² | 0.73 deg² | 30.6× |
-| GW190425 (S190425z) | 0.716 | 7787 deg² | 2494 deg² | 3.1× |
-| GW190814 (S190814bv) | 0.900 | 25.1 deg² | 10.0 deg² | 2.5× |
-| S240413p | 0.340 | 29.2 deg² | 27.4 deg² | 1.07× |
+| GW170817 (MCMC) | 0.910 | 12.2 deg² | 0.37 deg² | **33.1×** |
+| GW190814 (S190814bv) | 0.843 | 25.1 deg² | 12.0 deg² | 2.09× |
+| GW190425 (S190425z) | 0.454 | 7787 deg² | 5533 deg² | 1.41× |
+| S240413p | 0.170 | 29.2 deg² | 28.8 deg² | 1.01× |
+| S231206cc | 0.004 | 318.3 deg² | 317.9 deg² | 1.00× |
 
 (The shrink scales with how much probability lands on catalog galaxies — large for
 nearby events, small for distant ones where the catalog is incomplete.)
