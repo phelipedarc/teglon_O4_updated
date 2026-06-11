@@ -53,8 +53,15 @@ def credible_area_sqdeg(prob, nside, level):
     return float(np.sum(cred <= level) * pix_area)
 
 
-def load_event_maps(gw_id, healpix_file):
-    """Return (map_id, nside, t_0, net_prob_to_galaxies, map_2d, map_4d)."""
+def load_event_maps(gw_id, healpix_file, event_dir):
+    """Return (map_id, nside_2d, nside_4d, t_0, net_prob, map_2d, map_4d).
+
+    The **2D map is the original LIGO localization read at full resolution** from
+    the event's FITS file, so its credible areas equal the published values. The
+    **4D map is the Teglon galaxy-reweighted product**, reconstructed from the
+    database at the analysis resolution. If the original FITS is missing, the 2D
+    map falls back to the database (rescaled) probability.
+    """
     mrow = query_db(["SELECT id, RescaledNSIDE, t_0, NetProbToGalaxies FROM HealpixMap "
                      "WHERE GWID = '%s' AND Filename = '%s'" % (gw_id, healpix_file)])[0]
     if not mrow:
@@ -65,21 +72,33 @@ def load_event_maps(gw_id, healpix_file):
     t_0 = float(mrow[0][2])
     net_prob_to_galaxies = float(mrow[0][3])
 
+    # 4D galaxy-reweighted map (and the DB 2D, used only as a fallback) from the DB.
     rows = query_db([
         "SELECT hp.Pixel_Index, hp.Prob, hpc.NetPixelProb "
         "FROM HealpixPixel hp JOIN HealpixPixel_Completeness hpc "
         "ON hpc.HealpixPixel_id = hp.id WHERE hp.HealpixMap_id = %d "
         "ORDER BY hp.Pixel_Index;" % map_id])[0]
-
     npix = hp.nside2npix(nside)
-    map_2d = np.zeros(npix)
+    map_2d_db = np.zeros(npix)
     map_4d = np.zeros(npix)
     for r in rows:
         idx = int(r[0])
         if 0 <= idx < npix:
-            map_2d[idx] = float(r[1])
+            map_2d_db[idx] = float(r[1])
             map_4d[idx] = float(r[2])
-    return map_id, nside, t_0, net_prob_to_galaxies, map_2d, map_4d
+    nside_4d = nside
+
+    # Prefer the original full-resolution FITS for the 2D localization area.
+    orig_fits = os.path.join(event_dir, healpix_file)
+    if os.path.exists(orig_fits):
+        map_2d = hp.read_map(orig_fits, field=0)
+        nside_2d = hp.npix2nside(len(map_2d))
+    else:
+        print("Original FITS not found at %s; using the rescaled DB map for 2D." % orig_fits)
+        map_2d = map_2d_db
+        nside_2d = nside
+
+    return map_id, nside_2d, nside_4d, t_0, net_prob_to_galaxies, map_2d, map_4d
 
 
 def main():
@@ -94,20 +113,25 @@ def main():
     event_dir = args.healpix_dir.replace("{GWID}", args.gw_id)
     out_pdf = args.out or os.path.join(event_dir, "%s_2D_vs_4D_comparison.pdf" % args.gw_id)
 
-    map_id, nside, t_0, net_prob, map_2d, map_4d = load_event_maps(args.gw_id, args.healpix_file)
+    map_id, nside_2d, nside_4d, t_0, net_prob, map_2d, map_4d = load_event_maps(
+        args.gw_id, args.healpix_file, event_dir)
 
-    # Physically-correct comparison: same 2D representation, same pixel set, same
-    # (unit) normalization -- only the per-pixel probability differs (Teglon's update).
+    # Each map is normalized to unit total over its own pixel set; the 2D area is
+    # the published localization (full resolution), the 4D area is the Teglon
+    # galaxy-reweighted product (analysis resolution).
     map_2d = normalize(map_2d)
     map_4d = normalize(map_4d)
 
-    a2_90 = credible_area_sqdeg(map_2d, nside, 0.90)
-    a2_50 = credible_area_sqdeg(map_2d, nside, 0.50)
-    a4_90 = credible_area_sqdeg(map_4d, nside, 0.90)
-    a4_50 = credible_area_sqdeg(map_4d, nside, 0.50)
+    a2_90 = credible_area_sqdeg(map_2d, nside_2d, 0.90)
+    a2_50 = credible_area_sqdeg(map_2d, nside_2d, 0.50)
+    a4_90 = credible_area_sqdeg(map_4d, nside_4d, 0.90)
+    a4_50 = credible_area_sqdeg(map_4d, nside_4d, 0.50)
 
     def pct(orig, new):
         return (new - orig) / orig * 100.0 if orig > 0 else float("nan")
+
+    def fmt(a):
+        return ("%.2f" % a) if a < 1 else ("%.1f" % a) if a < 100 else ("%.0f" % a)
 
     t = Time(t_0, format="gps", scale="utc")
 
@@ -116,8 +140,8 @@ def main():
     print("gw_id=%s" % args.gw_id)
     print("healpix_file=%s" % args.healpix_file)
     print("map_id=%d" % map_id)
-    print("rescaled_nside=%d" % nside)
-    print("npix=%d" % hp.nside2npix(nside))
+    print("nside_2d=%d" % nside_2d)
+    print("nside_4d=%d" % nside_4d)
     print("t_0_gps=%.3f" % t_0)
     print("t_0_iso=%s" % t.to_value("iso"))
     print("net_prob_to_galaxies=%.6f" % net_prob)
@@ -140,8 +164,8 @@ def main():
     ax2 = fig.add_subplot(1, 2, 2, projection="astro hours mollweide")
 
     for ax, lv, title, cmap in (
-        (ax1, levels_2d, "Original 2D localization (LIGO)\n90%%=%.0f deg$^2$, 50%%=%.0f deg$^2$" % (a2_90, a2_50), "cylon"),
-        (ax2, levels_4d, "Same 2D map, Teglon-updated (galaxy-reweighted)\n90%%=%.0f deg$^2$, 50%%=%.0f deg$^2$" % (a4_90, a4_50), "cylon"),
+        (ax1, levels_2d, "Original LIGO localization (2D)\n90%%=%s deg$^2$, 50%%=%s deg$^2$" % (fmt(a2_90), fmt(a2_50)), "cylon"),
+        (ax2, levels_4d, "Teglon galaxy-reweighted (4D)\n90%%=%s deg$^2$, 50%%=%s deg$^2$" % (fmt(a4_90), fmt(a4_50)), "cylon"),
     ):
         ax.grid()
         ax.tick_params(axis="both", labelsize=5)
@@ -152,9 +176,10 @@ def main():
         except Exception as e:
             print("Plot warning for one panel: %s" % e)
 
-    fig.suptitle("%s  -  same 2D sky map, reweighted by the galaxy distribution "
-                 "(90%% credible region shrinks %.1fx)" % (args.gw_id, (a2_90 / a4_90) if a4_90 > 0 else float("nan")),
-                 fontsize=11)
+    fig.suptitle("%s  -  galaxy reweighting concentrates the localization "
+                 "(90%% credible region: %s $\\rightarrow$ %s deg$^2$, %.1fx smaller)"
+                 % (args.gw_id, fmt(a2_90), fmt(a4_90), (a2_90 / a4_90) if a4_90 > 0 else float("nan")),
+                 fontsize=10)
     plt.tight_layout()
     fig.savefig(out_pdf, bbox_inches="tight", format="pdf")
     plt.close("all")

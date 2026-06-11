@@ -195,19 +195,21 @@ the from-scratch install timing in [benchmark_report.md](benchmark_report.md)):
 (Of which ~3 s is the GraceDB download; the rest is ingest + galaxy-reweight +
 export. The full from-scratch install is ~45–63 min, one-time.)
 
-The `compare` step quantifies the localization improvement (normalized 90% credible
-region) on the same build:
+The `compare` step quantifies the localization improvement. The 2D area is the
+**published, full-resolution** localization (from the original FITS); the 4D area is
+the Teglon galaxy-reweighted product:
 
 | Event | Prob → galaxies | 2D 90° | Teglon 90° | shrink |
 | --- | --: | --: | --: | --: |
-| GW170817 (MCMC) | 0.910 | 12.2 deg² | 0.37 deg² | **33.1×** |
-| GW190814 (S190814bv) | 0.843 | 25.1 deg² | 12.0 deg² | 2.09× |
-| GW190425 (S190425z) | 0.454 | 7787 deg² | 5533 deg² | 1.41× |
-| S240413p | 0.170 | 29.2 deg² | 28.8 deg² | 1.01× |
-| S231206cc | 0.004 | 318.3 deg² | 317.9 deg² | 1.00× |
+| GW170817 (MCMC) | 0.910 | 16.2 deg² | 0.37 deg² | **44.0×** |
+| GW190814 (S190814bv) | 0.843 | 37.6 deg² | 12.0 deg² | 3.13× |
+| GW190425 (S190425z) | 0.454 | 10183 deg² | 5533 deg² | 1.84× |
+| S240413p | 0.170 | 38.1 deg² | 28.8 deg² | 1.33× |
+| S231206cc | 0.004 | 445.1 deg² | 317.9 deg² | 1.40× |
 
 (The shrink scales with how much probability lands on catalog galaxies — large for
-nearby events, small for distant ones where the catalog is incomplete.)
+nearby events, small for distant ones where the catalog is incomplete. Verify any
+value directly from a FITS with `teglon skymap-info <file>`.)
 
 ---
 

@@ -123,7 +123,8 @@ Full from-scratch install (clone the fork → ready-to-run) ≈ **45–63 min** 
 
 Benchmarked on a fresh from-scratch build of the fork. GW170817 used a local
 `MCMC_TF2_LowSpin_AllSky.fits` with the GWOSC fallback supplying the event time —
-its galaxy-reweighting shrinks the 90% region **33×** (12.2 → 0.37 deg²). See
+its galaxy-reweighting shrinks the 90% region **44×** (16.2 → 0.37 deg², where
+16.2 deg² is the published full-resolution area). See
 [the benchmark report](docs/benchmark_report.md) for the full breakdown.
 
 ## License

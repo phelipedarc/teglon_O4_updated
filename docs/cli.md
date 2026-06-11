@@ -64,8 +64,10 @@ Render the plan. Options: `--tele`, `--band`, `--tile-file`, `--num-tiles`,
 
 ## `teglon compare <GWID>`
 Save a side-by-side PDF of the original LIGO localization (2D) versus the Teglon
-galaxy-reweighted map (4D), and print the 50%/90% credible-region areas plus how
-much the localization shrank. `--out` overrides the PDF path.
+galaxy-reweighted map (4D), and print the 50\%/90\% credible-region areas plus how
+much the localization shrank. The **2D area is read from the original FITS at full
+resolution** (so it equals the published localization area); the 4D area is the
+galaxy-reweighted product. `--out` overrides the PDF path.
 
 ```bash
 teglon compare GW170817

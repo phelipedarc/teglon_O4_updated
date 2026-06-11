@@ -65,20 +65,25 @@ Using local skymap MCMC_TF2_LowSpin_AllSky.fits with GWOSC t_0=1187008882.4
 `trigger` time scales mostly with input-map resolution + localization tightness;
 all five produced 5-telescope tile lists + a reweighted FITS + a comparison PDF.
 
-### Science result (normalized 90% credible region)
+### Science result (90% credible region)
+The 2D area is the **published, full-resolution** localization (read directly from
+the original FITS); the 4D area is the Teglon galaxy-reweighted product. Both were
+cross-checked with `teglon skymap-info` (healpy): the 2D values match the original
+FITS exactly (e.g. GW170817 90% = 16.2 deg² = GWOSC `sky_area`), and the 4D values
+match `compare` exactly.
+
 | Event | Prob → galaxies | 2D 90° | Teglon 90° | shrink |
 |-------|---------------:|-------:|-----------:|-------:|
-| GW190425 (S190425z) | 0.454 | 7786.7 deg² | 5532.6 deg² | 1.41× |
-| GW190814 (S190814bv) | 0.843 | 25.1 deg² | 12.0 deg² | 2.09× |
-| S240413p | 0.170 | 29.2 deg² | 28.8 deg² | 1.01× |
-| S231206cc | 0.004 | 318.3 deg² | 317.9 deg² | 1.00× |
-| **GW170817 (MCMC)** | 0.910 | **12.2 deg²** | **0.37 deg²** | **33.1×** |
+| GW190425 (S190425z) | 0.454 | 10182.6 deg² | 5532.6 deg² | 1.84× |
+| GW190814 (S190814bv) | 0.843 | 37.6 deg² | 12.0 deg² | 3.13× |
+| S240413p | 0.170 | 38.1 deg² | 28.8 deg² | 1.33× |
+| S231206cc | 0.004 | 445.1 deg² | 317.9 deg² | 1.40× |
+| **GW170817 (MCMC)** | 0.910 | **16.2 deg²** | **0.37 deg²** | **44.0×** |
 
 The shrink scales with how much probability lands on catalog galaxies: GW170817
-(nearby, 91% to galaxies, tight MCMC map) collapses **33×**; distant events with low
-catalog completeness (S231206cc 0.4%, S240413p 17%) barely change — the expected
-behavior. The from-scratch build reproduces the earlier fresh-build values
-(S190814bv 0.843, S240413p 0.170, S231206cc 0.004).
+(nearby, 91% to galaxies, tight MCMC map) collapses **44×** (16.2 → 0.37 deg²);
+distant events with low catalog completeness (S231206cc 0.4%, S240413p 17%) shrink
+only modestly — the expected behavior.
 
 ---
 
