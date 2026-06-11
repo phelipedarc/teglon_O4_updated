@@ -6,14 +6,13 @@ the LIGO/Virgo/KAGRA O4 run.
 [![Documentation Status](https://readthedocs.org/projects/teglon-04/badge/?version=latest)](https://teglon-04.readthedocs.io/en/latest/?badge=latest)
 
 Given a gravitational-wave sky-localization (a LIGO HEALPix probability map), Teglon
-re-weights the 2D sky probability by a galaxy catalog (GLADE) to produce a sharper
-"4D" map, then tiles it with each telescope's field of view to output **ranked
+re-weights the 2D sky probability by a galaxy catalog (GLADE) to produce a physically informed
+re-weighted skymap, then tiles it with each telescope's field of view to output **ranked
 telescope pointings** — answering *where should we look first to find the
-electromagnetic counterpart?*
+electromagnetic counterpart?* 
 
 > This is an updated version with a unified `teglon` command-line interface, a Docker
-> wrapper, environment-based configuration (no port-forwarding), a GWOSC fallback for
-> non-superevents, and full documentation. **All original commands still work** — the
+> wrapper, environment-based configuration. **All original commands still work** — the
 > new commands are shorter equivalents.
 
 ---
