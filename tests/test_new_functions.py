@@ -183,6 +183,46 @@ class TestParserSafetyDefaults(unittest.TestCase):
         # Default is None (normal GraceDB path).
         self.assertIsNone(self.parser.parse_args(["load-map", "S190425z"]).t0)
 
+    def test_skymap_info_parser(self):
+        a = self.parser.parse_args(["skymap-info", "/tmp/x.fits"])
+        self.assertEqual(a.skymap_fits_file, "/tmp/x.fits")
+        self.assertIs(a.func, tc.cmd_skymap_info)
+
+
+class TestCredibleAreas(unittest.TestCase):
+    """check_info_skymap's area math (numpy-only; no healpy/FITS needed)."""
+
+    def _ten_pixel_map(self):
+        import numpy as np
+        prob = np.zeros(192)   # nside = 4
+        prob[:10] = 1.0        # 10 equal pixels -> 0.1 each once normalized
+        return prob
+
+    def test_areas_count_the_right_pixels(self):
+        # Levels chosen mid-step (between cumulative 0.4/0.5/0.9/1.0) to avoid
+        # floating-point boundary ambiguity: 0.45 -> 4 px, 0.55 -> 5 px, 0.95 -> 9 px.
+        pix = tc._FULL_SKY_DEG2 / 192
+        a = tc.credible_areas(self._ten_pixel_map(), levels=(0.45, 0.55, 0.95))
+        self.assertAlmostEqual(a[0.45], 4 * pix, places=6)
+        self.assertAlmostEqual(a[0.55], 5 * pix, places=6)
+        self.assertAlmostEqual(a[0.95], 9 * pix, places=6)
+
+    def test_areas_monotonic_50_90_99(self):
+        a = tc.credible_areas(self._ten_pixel_map(), levels=(0.5, 0.9, 0.99))
+        self.assertLessEqual(a[0.5], a[0.9])
+        self.assertLessEqual(a[0.9], a[0.99])
+
+    def test_normalization_invariant(self):
+        # A galaxy-reweighted map sums to < 1; areas must not depend on the total.
+        a1 = tc.credible_areas(self._ten_pixel_map(), levels=(0.45, 0.95))
+        a2 = tc.credible_areas(self._ten_pixel_map() * 0.37, levels=(0.45, 0.95))
+        for lev in (0.45, 0.95):
+            self.assertAlmostEqual(a1[lev], a2[lev], places=6)
+
+    def test_pixel_area_matches_healpy_formula(self):
+        # _FULL_SKY_DEG2 / npix == healpy.nside2pixarea(nside, degrees=True).
+        self.assertAlmostEqual(tc._FULL_SKY_DEG2, 41252.96124941927, places=2)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

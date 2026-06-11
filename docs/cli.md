@@ -71,6 +71,21 @@ much the localization shrank. `--out` overrides the PDF path.
 teglon compare GW170817
 ```
 
+## `teglon skymap-info <FITS>`
+Print the 50\%, 90\% and 99\% credible-region areas (deg²) of any HEALPix skymap
+FITS, computed **directly from the file with `healpy`**. Works on an original LIGO
+localization or on a Teglon reweighted map (`<GWID>_4D_reweighted_*`):
+
+```bash
+teglon skymap-info web/events/GW170817/MCMC_TF2_LowSpin_AllSky.fits
+teglon skymap-info web/events/S240413p/S240413p_4D_reweighted_bayestar.fits.gz
+```
+
+Use it to cross-check the credible areas against the published localisation: on the
+reweighted map the result reproduces `compare`'s 4D areas exactly, and on the
+original map it returns the full-resolution credible areas (e.g. GW170817 90% =
+16.2 deg², matching the GWOSC `sky_area`).
+
 ## `teglon load-obs <GWID> --tile-file FILE`
 Ingest community / observed tiles into the `ObservedTile` tables. `--tile-dir`
 defaults to `./web/events/{GWID}/observed_tiles`.

@@ -167,6 +167,53 @@ def reconstruct_reweighted_map(pixel_rows, nside, prob_index=4, pixindex_index=2
     return arr
 
 
+# Area of the full sky in square degrees ( = 4*pi sr ). One HEALPix pixel is this
+# divided by npix, which equals healpy.nside2pixarea(nside, degrees=True) exactly
+# but needs no healpy import (keeps `credible_areas` unit-testable on the host).
+_FULL_SKY_DEG2 = 4.0 * 180.0 * 180.0 / 3.141592653589793  # 41252.961249419...
+
+
+def credible_areas(prob, levels=(0.5, 0.9, 0.99)):
+    """Credible-region areas (sq deg) of a HEALPix probability map.
+
+    For each level L, returns the area of the smallest set of pixels whose summed
+    probability reaches L. The map is normalized to unit total first, so the result
+    is a proper credible region regardless of the map's absolute normalization
+    (e.g. a galaxy-reweighted map whose pixels sum to < 1). numpy-only, so it is
+    unit-testable without healpy. Uses the same method (and the same pixel area) as
+    `compare`, so the values agree with the reported credible areas.
+    """
+    import numpy as np
+
+    p = np.nan_to_num(np.asarray(prob, dtype=float), nan=0.0)
+    total = float(p.sum())
+    if total > 0:
+        p = p / total
+    pix_area_deg2 = _FULL_SKY_DEG2 / p.size
+    cumulative = np.cumsum(np.sort(p)[::-1])  # descending cumulative probability
+    return {lev: float(np.sum(cumulative <= lev)) * pix_area_deg2 for lev in levels}
+
+
+def check_info_skymap(skymap_fits_file, levels=(0.5, 0.9, 0.99)):
+    """Read a HEALPix skymap FITS and return its credible-region areas (sq deg).
+
+    Reads the PROB column (field 0) with healpy and computes the areas for `levels`
+    (default 50%, 90%, 99%). Works on both an original LIGO localization map and the
+    Teglon galaxy-reweighted map exported by `trigger`. Returns
+    {file, nside, npix, areas={level: area_sqdeg}}.
+    """
+    import healpy as hp
+
+    prob = hp.read_map(skymap_fits_file, field=0)
+    npix = len(prob)
+    return {
+        "file": skymap_fits_file,
+        "nside": int(hp.npix2nside(npix)),
+        "npix": int(npix),
+        "areas": credible_areas(prob, levels=levels),
+    }
+
+
 # --- pipeline stages (call Teglon methods directly) --------------------------
 def _teglon():
     # Imported lazily so `teglon --help` is fast and does not require the DB.
@@ -308,6 +355,21 @@ def cmd_compare(args):
     if args.out:
         extra += ["--out", args.out]
     return _run_script(os.path.join("web", "src", "analysis", "compare_skymaps.py"), extra)
+
+
+def cmd_skymap_info(args):
+    """Print the 50%, 90% and 99% credible-region areas of a skymap FITS, computed
+    directly from the file with healpy. Works on the original LIGO map and the
+    Teglon reweighted map."""
+    info = check_info_skymap(args.skymap_fits_file, levels=(0.5, 0.9, 0.99))
+    print("SKYMAP_INFO_BEGIN")
+    print("file=%s" % info["file"])
+    print("nside=%d" % info["nside"])
+    print("npix=%d" % info["npix"])
+    for lev in (0.5, 0.9, 0.99):
+        print("area_%d_sqdeg=%.2f" % (int(round(lev * 100)), info["areas"][lev]))
+    print("SKYMAP_INFO_END")
+    return 0
 
 
 # --- fresh-build bootstrap ---------------------------------------------------
@@ -601,6 +663,13 @@ def build_parser():
     _add_common_event_args(p)
     p.add_argument("--out", default=None, help="Output PDF path (default: in the event dir).")
     p.set_defaults(func=cmd_compare)
+
+    # skymap-info
+    p = sub.add_parser("skymap-info",
+                       help="50/90/99%% credible-region areas of a skymap FITS (healpy)")
+    p.add_argument("skymap_fits_file",
+                   help="Path to a HEALPix skymap FITS (original LIGO map or a Teglon reweighted map).")
+    p.set_defaults(func=cmd_skymap_info)
 
     # bootstrap
     p = sub.add_parser("bootstrap", help="Build a fresh DB: dust + GLADE (+ optional detectors)")
