@@ -28,7 +28,8 @@ are shorter equivalents. This guide focuses on what changed.
 | Full pipeline | run load_map → extract_tiles → plot_teglon by hand | `./teglon run <GWID>` (one command) |
 | Install | Docker only, no packaging | Docker wrapper **and** `pip install -e .` (`pyproject.toml`) |
 | DB connection | host hardcoded (`gw_db`) → needed a tunnel/Workbench port-forward | resolved from env first → **no port-forwarding** |
-| New capabilities | — | `delete-event`, `add-telescope`, `setup`, `trigger`, `compare` |
+| New capabilities | — | `delete-event`, `add-telescope`, `setup`, `trigger`, `compare`, `skymap-info`, `doctor` |
+| Scriptability | print-only | `--json` results, `--quiet`/`--verbose` logging, `--version` |
 | Docs | single intro page | full mkdocs site (install, CLI, config, testing, this guide) |
 
 Nothing was removed. The per-stage scripts in `web/src/**` are unchanged, so any
@@ -128,6 +129,7 @@ flags) → `build_init_pickles` — i.e. the entire v1.0 sections 5–6 in one c
 ./teglon setup            # print the plan
 ./teglon setup --run      # build the DB from scratch (~45–63 min)
 ```
+Re-running is idempotent — already-populated stages are skipped (`--force` to redo).
 
 ### 4.4 `teglon trigger <GWID>` — GW ID → re-weighted skymap
 Ingests + galaxy-reweights the map and exports the updated HEALPix probability map

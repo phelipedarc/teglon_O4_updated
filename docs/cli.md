@@ -6,6 +6,38 @@ install, call `teglon <subcommand> ...` directly.
 
 Run `teglon --help` or `teglon <subcommand> --help` at any time.
 
+## Global options & output
+
+Place these *before* the subcommand:
+
+| Option | Effect |
+| --- | --- |
+| `--version` | Print the Teglon version and exit |
+| `-q`, `--quiet` | Only log warnings/errors (results still print) |
+| `-v`, `--verbose` | Also log per-query debug detail |
+
+**stdout vs stderr.** Progress and debug messages go to **stderr** (controlled by
+`--quiet`/`--verbose`); machine-readable **results** (the `KEY=value` blocks and
+`--json`) go to **stdout**. So a scheduler can parse stdout cleanly:
+
+```bash
+teglon -q compare S240413p --json   # stdout: one JSON line; logs silenced
+```
+
+## `teglon doctor`
+
+Preflight checks before a run: database connectivity + content, the pickle caches,
+the SFD dust maps, the GLADE catalog, and Treasure Map token validity. Exits
+non-zero on a hard failure. `--json` emits the checks as JSON.
+
+```bash
+teglon doctor
+# [OK  ] database            gw_db:3306/teglon
+# [OK  ] database content    maps=5 galaxies=1614264 statictiles=396825
+# [OK  ] dust map (SFD)      /dustmaps/sfd/SFD_dust_4096_ngp.fits
+# [OK  ] Treasure Map token  79 instruments
+```
+
 ## `teglon run <GWID>`
 
 Full pipeline for one event: **load-map → extract → plot**.
@@ -57,6 +89,7 @@ all lookups for a fully-offline ingest.
 ### `teglon extract <GWID>`
 Produce ranked tile lists from an already-ingested map. Adds a box filter:
 `--band`, `--min-ra`, `--max-ra`, `--min-dec`, `--max-dec` (all four required together).
+`--json` emits a per-telescope tile-file summary (filename + tile count) to stdout.
 
 ### `teglon plot <GWID>`
 Render the plan. Options: `--tele`, `--band`, `--tile-file`, `--num-tiles`,
@@ -67,20 +100,28 @@ Save a side-by-side PDF of the original LIGO localization (2D) versus the Teglon
 galaxy-reweighted map (4D), and print the 50\%/90\% credible-region areas plus how
 much the localization shrank. The **2D area is read from the original FITS at full
 resolution** (so it equals the published localization area); the 4D area is the
-galaxy-reweighted product. `--out` overrides the PDF path.
+galaxy-reweighted product. `--out` overrides the PDF path; `--json` emits the area
+metrics as one JSON line on stdout.
 
 ```bash
 teglon compare GW170817
 ```
 
-## `teglon skymap-info <FITS>`
-Print the 50\%, 90\% and 99\% credible-region areas (deg²) of any HEALPix skymap
-FITS, computed **directly from the file with `healpy`**. Works on an original LIGO
-localization or on a Teglon reweighted map (`<GWID>_4D_reweighted_*`):
+## `teglon skymap-info <FITS | GWID>`
+Print the 50\%, 90\% and 99\% credible-region areas (deg²) of a HEALPix skymap,
+computed **directly from the file with `healpy`**. The argument is either:
+
+- a **FITS path** — report that one map; or
+- a **GW id** — report the original *and* the Teglon-reweighted map in the event
+  directory, plus the shrink factor (use `--healpix-file` if the original isn't
+  `bayestar.fits.gz`).
+
+`--json` emits JSON instead of `KEY=value`.
 
 ```bash
-teglon skymap-info web/events/GW170817/MCMC_TF2_LowSpin_AllSky.fits
-teglon skymap-info web/events/S240413p/S240413p_4D_reweighted_bayestar.fits.gz
+teglon skymap-info web/events/S240413p/bayestar.fits.gz   # single file
+teglon skymap-info S240413p                               # original + reweighted + shrink
+teglon skymap-info GW170817 --healpix-file MCMC_TF2_LowSpin_AllSky.fits --json
 ```
 
 Use it to cross-check the credible areas against the published localisation: on the
@@ -94,7 +135,8 @@ defaults to `./web/events/{GWID}/observed_tiles`.
 
 ## `teglon efficiency <GWID>`
 Model transient detection efficiency against a library of light curves.
-Options: `--model-type` (`kne`, `grb`, …), `--num-cpu`, `--clobber`.
+Options: `--model-type` (`kne`, `grb`, …), `--num-cpu`, `--clobber`, `--json`
+(emit a JSON summary of the output files).
 
 ## `teglon bootstrap`
 Build a fresh database (dust + GLADE + optional detectors/grids). See

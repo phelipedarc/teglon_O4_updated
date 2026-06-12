@@ -19,10 +19,21 @@ DATABASE_PORT=53306) with no port-forwarding.
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
 import time
+
+# Logs go through this logger (stderr), controlled by --quiet/--verbose. Structured
+# RESULTS (KEY=value blocks, --json) go to stdout via _emit() so a scheduler can parse
+# them regardless of the log level.
+logger = logging.getLogger("teglon")
+
+
+def _emit(line=""):
+    """Write a machine-readable result line to stdout (always, ignoring log level)."""
+    sys.stdout.write(str(line) + "\n")
 
 
 # --- repo-root awareness -----------------------------------------------------
@@ -39,20 +50,57 @@ def _ensure_repo_root():
         os.chdir(REPO_ROOT)
 
 
+def _get_version():
+    """Teglon version, from installed package metadata or pyproject.toml."""
+    try:
+        from importlib.metadata import version, PackageNotFoundError
+        try:
+            return version("teglon-o4")
+        except PackageNotFoundError:
+            pass
+    except Exception:
+        pass
+    try:
+        with open(os.path.join(REPO_ROOT, "pyproject.toml")) as fh:
+            for line in fh:
+                if line.strip().startswith("version") and "=" in line:
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return "unknown"
+
+
+def _configure_logging(quiet=False, verbose=False):
+    """Route log messages (stderr) at the requested level. Default INFO keeps the
+    usual progress messages; --quiet shows warnings/errors only (library/scheduler
+    use); --verbose adds the per-query debug detail. Format is the bare message, so
+    existing message text is unchanged."""
+    level = logging.WARNING if quiet else logging.DEBUG if verbose else logging.INFO
+    root = logging.getLogger()
+    if not root.handlers:
+        handler = logging.StreamHandler()  # stderr
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        root.addHandler(handler)
+    root.setLevel(level)
+
+
 def _banner(msg):
-    print("\n" + "=" * 70)
-    print(msg)
-    print("=" * 70 + "\n", flush=True)
+    logger.info("\n" + "=" * 70)
+    logger.info(msg)
+    logger.info("=" * 70 + "\n")
 
 
-def _run_script(rel_path, extra_args):
+def _run_script(rel_path, extra_args, stdout_to_stderr=False):
     """Run one of the standalone (non-method) scripts as a subprocess from the
-    repo root, inheriting the current environment (incl. DATABASE_* overrides)."""
+    repo root, inheriting the current environment (incl. DATABASE_* overrides).
+    With stdout_to_stderr, the child's stdout is redirected to stderr so the
+    caller can keep its own stdout clean for a --json result."""
     cmd = [sys.executable, rel_path] + list(extra_args)
     env = dict(os.environ)
     env["PYTHONPATH"] = REPO_ROOT + os.pathsep + env.get("PYTHONPATH", "")
-    print("+ " + " ".join(cmd), flush=True)
-    return subprocess.call(cmd, cwd=REPO_ROOT, env=env)
+    logger.info("+ " + " ".join(cmd))
+    return subprocess.call(cmd, cwd=REPO_ROOT, env=env,
+                           stdout=sys.stderr if stdout_to_stderr else None)
 
 
 # --- pure helpers (no DB / network / side effects; unit-tested) ---------------
@@ -239,21 +287,40 @@ def cmd_load_map(args):
 
 
 def cmd_extract(args):
-    _teglon().extract_tiles(
-        gw_id=args.gw_id,
-        healpix_dir=args.healpix_dir,
-        healpix_file=args.healpix_file,
-        tele=args.tele,
-        band=args.band,
-        extinct=args.extinct,
-        prob_type=args.prob_type,
-        cum_prob=args.cum_prob,
-        num_tiles=args.num_tiles,
-        min_ra=args.min_ra,
-        max_ra=args.max_ra,
-        min_dec=args.min_dec,
-        max_dec=args.max_dec,
-    )
+    import contextlib
+    # With --json, keep stdout clean (only the JSON): send any library chatter
+    # (e.g. dustmaps' config message) to stderr during the run.
+    ctx = contextlib.redirect_stdout(sys.stderr) if getattr(args, "json", False) \
+        else contextlib.nullcontext()
+    with ctx:
+        _teglon().extract_tiles(
+            gw_id=args.gw_id,
+            healpix_dir=args.healpix_dir,
+            healpix_file=args.healpix_file,
+            tele=args.tele,
+            band=args.band,
+            extinct=args.extinct,
+            prob_type=args.prob_type,
+            cum_prob=args.cum_prob,
+            num_tiles=args.num_tiles,
+            min_ra=args.min_ra,
+            max_ra=args.max_ra,
+            min_dec=args.min_dec,
+            max_dec=args.max_dec,
+        )
+    if getattr(args, "json", False):
+        import glob
+        d = event_dir(args.gw_id, args.healpix_dir)
+        box = "_box" if all(v != -1 for v in (args.min_ra, args.max_ra, args.min_dec, args.max_dec)) else ""
+        pattern = os.path.join(d, "%s_*_%s_%s_%s%s.txt" % (
+            args.gw_id, args.prob_type, args.cum_prob, args.healpix_file, box))
+        out = {"gw_id": args.gw_id, "prob_type": args.prob_type,
+               "cum_prob": args.cum_prob, "tile_files": []}
+        for f in sorted(glob.glob(pattern)):
+            with open(f) as fh:
+                n_rows = max(0, sum(1 for ln in fh if not ln.startswith("#")) - 1)
+            out["tile_files"].append({"file": os.path.basename(f), "num_tiles": n_rows})
+        _emit(json.dumps(out))
     return 0
 
 
@@ -313,7 +380,7 @@ def cmd_run(args):
             healpix_file=args.healpix_file,
         )
     else:
-        print("[3/3] Skipping plot (--no-plot).")
+        logger.info("[3/3] Skipping plot (--no-plot).")
 
     _banner("Done. Output is in %s" % args.healpix_dir.replace("{GWID}", args.gw_id))
     return 0
@@ -341,9 +408,20 @@ def cmd_efficiency(args):
     ]
     if args.clobber:
         extra.append("--clobber")
-    return _run_script(
-        os.path.join("web", "src", "analysis", "model_detection_efficiency.py"), extra
+    rc = _run_script(
+        os.path.join("web", "src", "analysis", "model_detection_efficiency.py"), extra,
+        stdout_to_stderr=getattr(args, "json", False),
     )
+    if getattr(args, "json", False):
+        import glob
+        d = event_dir(args.gw_id, args.healpix_dir)
+        mdir = os.path.join(d, "model_detection", args.model_type)
+        files = [f for f in glob.glob(os.path.join(mdir, "**", "*"), recursive=True)
+                 if os.path.isfile(f)]
+        _emit(json.dumps({"gw_id": args.gw_id, "model_type": args.model_type,
+                          "output_dir": mdir, "num_files": len(files),
+                          "files": sorted(os.path.relpath(f, d) for f in files)[:100]}))
+    return rc
 
 
 def cmd_compare(args):
@@ -354,21 +432,74 @@ def cmd_compare(args):
     ]
     if args.out:
         extra += ["--out", args.out]
+    if getattr(args, "json", False):
+        extra.append("--json")
     return _run_script(os.path.join("web", "src", "analysis", "compare_skymaps.py"), extra)
 
 
+def _emit_skymap_info(info, as_json):
+    """Write one skymap's credible areas to stdout (KEY=value or JSON)."""
+    levels = (0.5, 0.9, 0.99)
+    if as_json:
+        _emit(json.dumps({
+            "file": info["file"], "nside": info["nside"], "npix": info["npix"],
+            "areas_sqdeg": {("%d" % int(round(l * 100))): round(info["areas"][l], 4) for l in levels},
+        }))
+        return
+    _emit("SKYMAP_INFO_BEGIN")
+    _emit("file=%s" % info["file"])
+    _emit("nside=%d" % info["nside"])
+    _emit("npix=%d" % info["npix"])
+    for lev in levels:
+        _emit("area_%d_sqdeg=%.2f" % (int(round(lev * 100)), info["areas"][lev]))
+    _emit("SKYMAP_INFO_END")
+
+
 def cmd_skymap_info(args):
-    """Print the 50%, 90% and 99% credible-region areas of a skymap FITS, computed
-    directly from the file with healpy. Works on the original LIGO map and the
-    Teglon reweighted map."""
-    info = check_info_skymap(args.skymap_fits_file, levels=(0.5, 0.9, 0.99))
-    print("SKYMAP_INFO_BEGIN")
-    print("file=%s" % info["file"])
-    print("nside=%d" % info["nside"])
-    print("npix=%d" % info["npix"])
-    for lev in (0.5, 0.9, 0.99):
-        print("area_%d_sqdeg=%.2f" % (int(round(lev * 100)), info["areas"][lev]))
-    print("SKYMAP_INFO_END")
+    """50/90/99% credible-region areas of a skymap FITS (healpy), to stdout.
+
+    The positional argument is either a FITS path, or a GW id -- in which case
+    the original and the Teglon-reweighted maps in the event directory are both
+    reported together with the shrink factor.
+    """
+    target = args.skymap_fits_file
+    levels = (0.5, 0.9, 0.99)
+
+    # File mode: the argument is an existing file.
+    if os.path.isfile(target):
+        _emit_skymap_info(check_info_skymap(target, levels=levels), args.json)
+        return 0
+
+    # GW-id mode: locate the original + reweighted maps in the event directory.
+    d = event_dir(target, args.healpix_dir)
+    orig = os.path.join(d, args.healpix_file)
+    rewt = reweighted_output_path(target, args.healpix_dir, args.healpix_file)
+    if not os.path.isfile(orig):
+        logger.error("Not a file and no original map for GW id `%s` at %s" % (target, orig))
+        return 1
+    oinfo = check_info_skymap(orig, levels=levels)
+    rinfo = check_info_skymap(rewt, levels=levels) if os.path.isfile(rewt) else None
+
+    if args.json:
+        out = {"gw_id": target, "original": {
+            "file": oinfo["file"], "nside": oinfo["nside"],
+            "areas_sqdeg": {("%d" % int(round(l * 100))): round(oinfo["areas"][l], 4) for l in levels}}}
+        if rinfo:
+            out["reweighted"] = {
+                "file": rinfo["file"], "nside": rinfo["nside"],
+                "areas_sqdeg": {("%d" % int(round(l * 100))): round(rinfo["areas"][l], 4) for l in levels}}
+            out["shrink_factor_90"] = round(oinfo["areas"][0.9] / rinfo["areas"][0.9], 3) \
+                if rinfo["areas"][0.9] > 0 else None
+        _emit(json.dumps(out))
+        return 0
+
+    _emit_skymap_info(oinfo, False)
+    if rinfo:
+        _emit_skymap_info(rinfo, False)
+        if rinfo["areas"][0.9] > 0:
+            _emit("shrink_factor_90=%.2f" % (oinfo["areas"][0.9] / rinfo["areas"][0.9]))
+    else:
+        logger.info("(no reweighted map yet at %s -- run `teglon trigger %s` first)" % (rewt, target))
     return 0
 
 
@@ -384,19 +515,19 @@ def cmd_bootstrap(args):
         _banner("[bootstrap] Initializing SFD dust map (ebv.pkl) ...")
         rc = _run_script(os.path.join("web", "src", "utilities", "initialize_dust.py"), [])
         if rc != 0:
-            print("Dust initialization failed (rc=%s). Aborting." % rc)
+            logger.info("Dust initialization failed (rc=%s). Aborting." % rc)
             return rc
 
     if not args.skip_galaxies:
         _banner("[bootstrap] Uploading GLADE galaxy catalog ...")
         rc = _run_script(os.path.join("web", "src", "utilities", "bulk_upload_glade.py"), [])
         if rc != 0:
-            print("GLADE upload failed (rc=%s). Aborting." % rc)
+            logger.info("GLADE upload failed (rc=%s). Aborting." % rc)
             return rc
 
     if args.instruments_config:
         if not os.path.exists(args.instruments_config):
-            print("Instruments config not found: %s" % args.instruments_config)
+            logger.info("Instruments config not found: %s" % args.instruments_config)
             return 1
         with open(args.instruments_config) as fh:
             instruments = json.load(fh)
@@ -421,7 +552,7 @@ def cmd_bootstrap(args):
                 detector_prefix=inst["detector_prefix"],
             )
     else:
-        print(
+        logger.info(
             "\nNo --instruments-config provided: dust + GLADE are loaded, but no\n"
             "detectors/static grids were created. Provide a JSON file (see\n"
             "docs/bootstrap.md and Settings.example.ini) describing each instrument,\n"
@@ -452,28 +583,28 @@ def cmd_delete_event(args):
     files = [] if args.db_only else plan_event_file_deletion(directory)
 
     _banner("Delete plan for event %s" % args.gw_id)
-    print("Database maps to remove (%d):" % len(map_ids))
+    logger.info("Database maps to remove (%d):" % len(map_ids))
     for mid, fn in map_ids:
-        print("  - HealpixMap id=%d  (%s)" % (mid, fn))
+        logger.info("  - HealpixMap id=%d  (%s)" % (mid, fn))
     if not args.db_only:
-        print("\nFiles/dirs to remove under %s (%d):" % (directory, len(files)))
+        logger.info("\nFiles/dirs to remove under %s (%d):" % (directory, len(files)))
         for p in files[:20]:
-            print("  - %s" % p)
+            logger.info("  - %s" % p)
         if len(files) > 20:
-            print("  ... and %d more" % (len(files) - 20))
+            logger.info("  ... and %d more" % (len(files) - 20))
 
     if not args.yes:
-        print("\nDRY RUN -- nothing was deleted. Re-run with --yes to execute.")
+        logger.info("\nDRY RUN -- nothing was deleted. Re-run with --yes to execute.")
         return 0
 
     if not args.files_only:
         for mid, fn in map_ids:
-            print("Deleting HealpixMap id=%d ..." % mid)
+            logger.info("Deleting HealpixMap id=%d ..." % mid)
             for q in build_delete_map_sql(mid):
                 query_db([q], commit=True)
     if not args.db_only and os.path.isdir(directory):
         import shutil
-        print("Removing directory %s ..." % directory)
+        logger.info("Removing directory %s ..." % directory)
         shutil.rmtree(directory)
 
     _banner("Deleted event %s." % args.gw_id)
@@ -493,31 +624,57 @@ def cmd_add_telescope(args):
         _banner("Building static grid for Teglon detector id=%s ..." % args.teglon_detector_id)
         t.add_static_grid(teglon_detector_id=args.teglon_detector_id, detector_prefix=args.prefix)
     else:
-        print("\nDetector added. To build its static tile grid, re-run with "
+        logger.info("\nDetector added. To build its static tile grid, re-run with "
               "--teglon-detector-id <DB id> --prefix <letter> (the DB id is the new "
               "Detector.id; check it with `./teglon dbshell`).")
     return 0
 
 
+def _setup_stage_done(script_path):
+    """Best-effort check whether a setup stage's output already exists, so a re-run
+    after a partial failure doesn't duplicate rows. Returns (done, detail)."""
+    name = os.path.basename(script_path)
+    try:
+        if name in ("bulk_upload_glade.py", "initialize_teglon.py"):
+            from web.src.utilities.Database_Helpers import query_db
+            table = "Galaxy" if name == "bulk_upload_glade.py" else "StaticTile"
+            n = int(query_db(["SELECT COUNT(*) FROM %s" % table])[0][0][0])
+            return (n > 0, "%s rows=%d" % (table, n))
+        if name == "build_init_pickles.py":
+            pkl = os.path.join(REPO_ROOT, "web", "src", "utilities", "pickles",
+                               "composed_completeness_dict.pkl")
+            return (os.path.exists(pkl), pkl)
+    except Exception as e:
+        logger.debug("idempotency check failed for %s: %s" % (name, e))
+    return (False, "")
+
+
 def cmd_setup(args):
     """One-time complete Teglon initialization. DRY-RUN by default: prints the plan;
-    add --run to execute (can take ~2-3 hours)."""
+    add --run to execute (~45-63 min). Stages already populated are skipped unless
+    --force is given."""
     steps = build_setup_steps(skip_glade=args.skip_glade, skip_init=args.skip_init,
                               skip_pickles=args.skip_pickles, is_debug=not args.no_debug)
     _banner("Teglon one-time setup plan (%d steps)" % len(steps))
     for i, (label, argv) in enumerate(steps, 1):
-        print("  [%d] %s" % (i, label))
-        print("        python %s" % " ".join(argv))
+        logger.info("  [%d] %s" % (i, label))
+        logger.info("        python %s" % " ".join(argv))
 
     if not args.run:
-        print("\nDRY RUN -- nothing was executed. Re-run with --run to perform setup.")
+        logger.info("\nDRY RUN -- nothing was executed. Re-run with --run to perform setup.")
         return 0
 
     for i, (label, argv) in enumerate(steps, 1):
+        if not args.force:
+            done, detail = _setup_stage_done(argv[0])
+            if done:
+                _banner("[setup %d/%d] %s -- already populated (%s); skipping (use --force to redo)."
+                        % (i, len(steps), label, detail))
+                continue
         _banner("[setup %d/%d] %s" % (i, len(steps), label))
         rc = _run_script(argv[0], argv[1:])
         if rc != 0:
-            print("Step failed (rc=%s): %s. Aborting." % (rc, label))
+            logger.info("Step failed (rc=%s): %s. Aborting." % (rc, label))
             return rc
     _banner("Setup complete.")
     return 0
@@ -557,6 +714,67 @@ def cmd_trigger(args):
     return 0
 
 
+def cmd_doctor(args):
+    """Preflight checks: database connectivity + content, pickle caches, dust maps,
+    GLADE catalog, and Treasure Map token validity. Exits non-zero on a hard failure."""
+    checks = []  # (name, status, detail) with status in OK / WARN / FAIL
+
+    # 1. Database connectivity + content.
+    try:
+        from web.src.utilities.Database_Helpers import query_db, db_host, db_port, db_name
+        nmaps = int(query_db(["SELECT COUNT(*) FROM HealpixMap"])[0][0][0])
+        ngal = int(query_db(["SELECT COUNT(*) FROM Galaxy"])[0][0][0])
+        ntile = int(query_db(["SELECT COUNT(*) FROM StaticTile"])[0][0][0])
+        checks.append(("database", "OK", "%s:%s/%s" % (db_host, db_port, db_name)))
+        status = "OK" if (ngal > 0 and ntile > 0) else "WARN"
+        checks.append(("database content", status,
+                       "maps=%d galaxies=%d statictiles=%d%s"
+                       % (nmaps, ngal, ntile, "" if status == "OK" else "  (run `teglon setup --run`)")))
+    except Exception as e:
+        checks.append(("database", "FAIL", str(e)))
+
+    # 2. Pickle caches.
+    pdir = os.path.join(REPO_ROOT, "web", "src", "utilities", "pickles")
+    for pk in ("composed_completeness_dict.pkl", "ebv.pkl", "sky_pixels.pkl"):
+        path = os.path.join(pdir, pk)
+        checks.append(("pickle " + pk, "OK" if os.path.exists(path) else "WARN", path))
+
+    # 3. Dust maps.
+    dust_cfg = os.environ.get("DUSTMAPS_CONFIG_FNAME", "")
+    dust_base = os.path.dirname(dust_cfg) if dust_cfg else "/dustmaps"
+    sfd = os.path.join(dust_base, "sfd", "SFD_dust_4096_ngp.fits")
+    checks.append(("dust map (SFD)", "OK" if os.path.exists(sfd) else "WARN", sfd))
+
+    # 4. GLADE catalog file.
+    glade = os.path.join(REPO_ROOT, "web", "src", "utilities", "galaxy_catalog_files", "GLADE_2.4.dat")
+    checks.append(("GLADE catalog", "OK" if os.path.exists(glade) else "WARN", glade))
+
+    # 5. Treasure Map token validity (the type=1 instruments probe).
+    try:
+        from configparser import RawConfigParser
+        import requests
+        cfg = RawConfigParser()
+        cfg.read([os.environ.get("TEGLON_SETTINGS", ""),
+                  os.path.join(REPO_ROOT, "Settings.ini"), "Settings.ini"])
+        token = cfg.get("treasuremap", "TM_API_TOKEN")
+        endpoint = cfg.get("treasuremap", "TM_ENDPOINT").rstrip("/")
+        resp = requests.get(endpoint + "/instruments",
+                            params={"api_token": token, "type": 1}, timeout=20)
+        if resp.status_code == 200 and isinstance(resp.json(), list):
+            checks.append(("Treasure Map token", "OK", "%d instruments" % len(resp.json())))
+        else:
+            checks.append(("Treasure Map token", "WARN", "HTTP %s" % resp.status_code))
+    except Exception as e:
+        checks.append(("Treasure Map token", "WARN", str(e)))
+
+    if getattr(args, "json", False):
+        _emit(json.dumps([{"check": n, "status": s, "detail": d} for n, s, d in checks]))
+    else:
+        for n, s, d in checks:
+            _emit("[%-4s] %-26s %s" % (s, n, d))
+    return 1 if any(s == "FAIL" for _, s, _ in checks) else 0
+
+
 # --- argument wiring ---------------------------------------------------------
 def _add_common_event_args(p):
     p.add_argument("gw_id", help="LIGO superevent name, e.g. S230529ay")
@@ -572,6 +790,12 @@ def build_parser():
         description="Teglon-O4: gravitational-wave follow-up observation planner.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument("--version", action="version", version="teglon " + _get_version())
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument("-q", "--quiet", action="store_true",
+                           help="Only log warnings/errors (results still print to stdout).")
+    verbosity.add_argument("-v", "--verbose", action="store_true",
+                           help="Log per-query debug detail too.")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # run
@@ -627,6 +851,7 @@ def build_parser():
     p.add_argument("--max-ra", dest="max_ra", type=float, default=-1.0)
     p.add_argument("--min-dec", dest="min_dec", type=float, default=-1.0)
     p.add_argument("--max-dec", dest="max_dec", type=float, default=-1.0)
+    p.add_argument("--json", action="store_true", help="Emit a JSON summary of the tile files.")
     p.set_defaults(func=cmd_extract)
 
     # plot
@@ -655,6 +880,7 @@ def build_parser():
     p.add_argument("--model-type", dest="model_type", default="kne", help="e.g. kne, grb. Default: kne")
     p.add_argument("--num-cpu", dest="num_cpu", type=int, default=5)
     p.add_argument("--clobber", action="store_true")
+    p.add_argument("--json", action="store_true", help="Emit a JSON summary of the output files.")
     p.set_defaults(func=cmd_efficiency)
 
     # compare
@@ -662,14 +888,27 @@ def build_parser():
                        help="Side-by-side 2D vs 4D (galaxy-reweighted) skymap PDF + area metrics")
     _add_common_event_args(p)
     p.add_argument("--out", default=None, help="Output PDF path (default: in the event dir).")
+    p.add_argument("--json", action="store_true", help="Emit the area metrics as JSON.")
     p.set_defaults(func=cmd_compare)
 
     # skymap-info
     p = sub.add_parser("skymap-info",
                        help="50/90/99%% credible-region areas of a skymap FITS (healpy)")
     p.add_argument("skymap_fits_file",
-                   help="Path to a HEALPix skymap FITS (original LIGO map or a Teglon reweighted map).")
+                   help="A FITS path, OR a GW id (then the original + reweighted maps "
+                        "in the event dir are both reported with the shrink factor).")
+    p.add_argument("--healpix-file", dest="healpix_file", default="bayestar.fits.gz",
+                   help="Original map filename, GW-id mode only. Default: bayestar.fits.gz")
+    p.add_argument("--healpix-dir", dest="healpix_dir", default="./web/events/{GWID}",
+                   help="Event directory, GW-id mode only.")
+    p.add_argument("--json", action="store_true", help="Emit JSON instead of KEY=value.")
     p.set_defaults(func=cmd_skymap_info)
+
+    # doctor
+    p = sub.add_parser("doctor",
+                       help="Preflight: check DB, pickles, dust maps, GLADE, Treasure Map token")
+    p.add_argument("--json", action="store_true", help="Emit the checks as JSON.")
+    p.set_defaults(func=cmd_doctor)
 
     # bootstrap
     p = sub.add_parser("bootstrap", help="Build a fresh DB: dust + GLADE (+ optional detectors)")
@@ -707,6 +946,8 @@ def build_parser():
     # setup
     p = sub.add_parser("setup", help="One-time complete initialization (dry-run unless --run)")
     p.add_argument("--run", action="store_true", help="Actually execute setup (otherwise print the plan).")
+    p.add_argument("--force", action="store_true",
+                   help="Re-run stages even if their tables/pickles already exist.")
     p.add_argument("--skip-glade", dest="skip_glade", action="store_true")
     p.add_argument("--skip-init", dest="skip_init", action="store_true")
     p.add_argument("--skip-pickles", dest="skip_pickles", action="store_true")
@@ -735,9 +976,10 @@ def main(argv=None):
     _ensure_repo_root()
     parser = build_parser()
     args = parser.parse_args(argv)
+    _configure_logging(quiet=getattr(args, "quiet", False), verbose=getattr(args, "verbose", False))
     start = time.time()
     rc = args.func(args)
-    print("\n[teglon %s] total execution time: %.1fs" % (args.command, time.time() - start))
+    logger.info("\n[teglon %s] total execution time: %.1fs" % (args.command, time.time() - start))
     return rc or 0
 
 

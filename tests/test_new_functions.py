@@ -188,6 +188,32 @@ class TestParserSafetyDefaults(unittest.TestCase):
         self.assertEqual(a.skymap_fits_file, "/tmp/x.fits")
         self.assertIs(a.func, tc.cmd_skymap_info)
 
+    def test_skymap_info_gwid_and_json(self):
+        a = self.parser.parse_args(["skymap-info", "S240413p", "--json"])
+        self.assertEqual(a.skymap_fits_file, "S240413p")
+        self.assertTrue(a.json)
+        self.assertEqual(a.healpix_file, "bayestar.fits.gz")
+
+    def test_doctor_parses(self):
+        self.assertIs(self.parser.parse_args(["doctor"]).func, tc.cmd_doctor)
+
+    def test_setup_force_flag(self):
+        self.assertTrue(self.parser.parse_args(["setup", "--run", "--force"]).force)
+        self.assertFalse(self.parser.parse_args(["setup", "--run"]).force)
+
+    def test_json_flag_on_extract_compare_efficiency(self):
+        for cmd in (["extract", "S240413p", "--json"],
+                    ["compare", "S240413p", "--json"],
+                    ["efficiency", "S240413p", "--json"]):
+            self.assertTrue(self.parser.parse_args(cmd).json)
+
+    def test_global_quiet_verbose(self):
+        self.assertTrue(self.parser.parse_args(["-q", "doctor"]).quiet)
+        self.assertTrue(self.parser.parse_args(["--verbose", "doctor"]).verbose)
+        # mutually exclusive
+        with self.assertRaises(SystemExit):
+            self.parser.parse_args(["-q", "-v", "doctor"])
+
 
 class TestCredibleAreas(unittest.TestCase):
     """check_info_skymap's area math (numpy-only; no healpy/FITS needed)."""

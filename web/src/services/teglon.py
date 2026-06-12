@@ -48,6 +48,31 @@ from ligo.skymap.postprocess.util import find_greedy_credible_levels
 
 from configparser import RawConfigParser
 
+import logging
+
+# All progress/debug output goes through this logger so it can be silenced
+# (--quiet) or expanded (--verbose) by the CLI without flooding stdout. The CLI
+# configures logging before importing this module; for direct/library use (e.g.
+# the legacy `python web/src/ingestion/load_map.py`) we ensure a default handler so
+# the same messages still appear.
+logger = logging.getLogger("teglon")
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+
+
+def _print(*args, **kwargs):
+    """print-compatible shim that routes through logging. Joins args with spaces like
+    print and ignores end/flush/file kwargs, so the message text is unchanged."""
+    logger.info(" ".join(str(a) for a in args))
+
+
+# Directory holding utility data (pickles, galaxy catalog files), derived from this
+# file's location so it resolves under Docker (/app/web/src/utilities) and host/pip
+# installs alike -- not hardcoded to /app.
+_UTILITIES_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "utilities")
+
+
 def initialize_tile(tile):
     tile.enclosed_pixel_indices
     # tile.query_polygon_string
@@ -73,7 +98,7 @@ def fetch_gwosc_event(gw_id, gwosc_base="https://gwosc.org/eventapi/json"):
             return None
         events = (resp.json() or {}).get("events", {})
     except Exception as e:
-        print("GWOSC lookup error for `%s`: %s" % (gw_id, e))
+        _print("GWOSC lookup error for `%s`: %s" % (gw_id, e))
         return None
 
     if not events:
@@ -105,7 +130,7 @@ class Teglon:
         config.read(configFile)
         self.config = config
 
-        utilities_base_dir = "/app/web/src/utilities"
+        utilities_base_dir = _UTILITIES_DIR
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
         self.pickle_output_dir = pickle_output_dir
 
@@ -175,7 +200,7 @@ class Teglon:
 
         if gw_id == "":
             is_error = True
-            print("GWID is required.")
+            _print("GWID is required.")
         else:
             if "{GWID}" in formatted_healpix_dir:
                 formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
@@ -184,35 +209,35 @@ class Teglon:
                                                             file_name=healpix_file)
         if healpix_file == "":
             is_error = True
-            print("You must specify which healpix file to process.")
+            _print("You must specify which healpix file to process.")
         else:
             if not os.path.exists(healpix_file_path):
                 is_error = True
-                print("Healpix file does not exist!")
+                _print("Healpix file does not exist!")
 
         if tele not in detector_mapping:
             is_error = True
-            print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+            _print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
 
         if band not in band_mapping:
             is_error = True
-            print("Invalid band selection. Available bands: %s" % band_mapping.keys())
+            _print("Invalid band selection. Available bands: %s" % band_mapping.keys())
 
         if extinct <= 0.0:
             is_error = True
-            print("Extinction must be a valid float > 0.0")
+            _print("Extinction must be a valid float > 0.0")
 
         if num_tiles < 1:
             is_error = True
-            print("Number of tiles  must > 1")
+            _print("Number of tiles  must > 1")
 
         if not (prob_type == _4D or prob_type == _2D):
             is_error = True
-            print("Prob type must either be `4D` or `2D`")
+            _print("Prob type must either be `4D` or `2D`")
 
         if cum_prob > 0.95 or cum_prob < 0.20:
             is_error = True
-            print("Cumulative prob must be between 0.2 and 0.95")
+            _print("Cumulative prob must be between 0.2 and 0.95")
 
         is_box_query = False
         if min_ra != -1 and \
@@ -224,22 +249,22 @@ class Teglon:
 
             if min_ra < 0.0 or min_ra >= max_ra:
                 is_error = True
-                print("Min RA must be >= 0.0 and be < Max RA")
+                _print("Min RA must be >= 0.0 and be < Max RA")
 
             if max_ra > 360.0 or max_ra <= min_ra:
                 is_error = True
-                print("Max RA must be <= 360.0 and be > Min RA")
+                _print("Max RA must be <= 360.0 and be > Min RA")
 
             if min_dec < -90.0 or min_dec >= max_dec:
                 is_error = True
-                print("Min Dec must be >= -90.0 and be < Max Dec")
+                _print("Min Dec must be >= -90.0 and be < Max Dec")
 
             if max_dec > 90.0 or max_dec <= min_dec:
                 is_error = True
-                print("Max Dec must be <= 90.0 and be > Min Dec")
+                _print("Max Dec must be <= 90.0 and be > Min Dec")
 
         if is_error:
-            print("Exiting...")
+            _print("Exiting...")
             return 1
         # endregion
 
@@ -542,9 +567,9 @@ class Teglon:
             chmod_outputfile(file_output)
 
         t2 = time.time()
-        print("\n********* start DEBUG ***********")
-        print("Extract Tiles execution time: %s" % (t2 - t1))
-        print("********* end DEBUG ***********\n")
+        _print("\n********* start DEBUG ***********")
+        _print("Extract Tiles execution time: %s" % (t2 - t1))
+        _print("********* end DEBUG ***********\n")
 
     # def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r",
     #                 extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
@@ -553,7 +578,7 @@ class Teglon:
     #     nside128 = 128
 
     #     # Set up external resource directories
-    #     utilities_base_dir = "/app/web/src/utilities"
+    #     utilities_base_dir = _UTILITIES_DIR
     #     pickle_output_dir = "%s/pickles/" % utilities_base_dir
 
     #     detector_mapping = {
@@ -583,26 +608,26 @@ class Teglon:
     #     }
 
     #     # Parameter checks
-    #     print("\n\n**************************\nChecking Parameters...")
+    #     _print("\n\n**************************\nChecking Parameters...")
     #     if gw_id == "":
     #         is_error = True
-    #         print("GWID is required.")
+    #         _print("GWID is required.")
 
     #     if band not in band_mapping:
     #         is_error = True
-    #         print("Invalid band selection. Available bands: %s" % band_mapping.keys())
+    #         _print("Invalid band selection. Available bands: %s" % band_mapping.keys())
 
     #     if tele not in detector_mapping:
     #         is_error = True
-    #         print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+    #         _print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
 
     #     if is_error:
-    #         print("\n\nErrors! See above output.")
-    #         print("Exiting...")
-    #         print("\n**************************")
+    #         _print("\n\nErrors! See above output.")
+    #         _print("Exiting...")
+    #         _print("\n**************************")
     #         return 1
     #     else:
-    #         print("Checked!\n**************************")
+    #         _print("Checked!\n**************************")
 
     #     formatted_healpix_dir = healpix_dir
     #     formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
@@ -704,17 +729,17 @@ class Teglon:
     #                                  alpha=0.75)
 
     #     # Dust
-    #     print("\tLoading existing mwe...")
+    #     _print("\tLoading existing mwe...")
     #     ebv = None
     #     if os.path.exists(pickle_output_dir + "ebv.pkl"):
     #         with open(pickle_output_dir + "ebv.pkl", 'rb') as handle:
     #             ebv = pickle.load(handle)
     #     else:
-    #         print('ebv.pkl does not exist! Creating...')
+    #         _print('ebv.pkl does not exist! Creating...')
     #         theta, phi = hp.pix2ang(nside=nside128, ipix=np.arange(hp.nside2npix(nside128)))
     #         pix_coord = coord.SkyCoord(ra=np.rad2deg(phi), dec=np.rad2deg(0.5 * np.pi - theta), unit=(u.deg, u.deg))
 
-    #         print("Retrieving dust info")
+    #         _print("Retrieving dust info")
     #         sfd = SFDQuery()
     #         ebv = sfd(pix_coord)
 
@@ -765,8 +790,8 @@ class Teglon:
     #         if len(tiles_to_plot) > 0:
     #             min_prob = np.min(tiles["Prob"])
     #             max_prob = np.max(tiles["Prob"])
-    #             print("min prob for `%s`: %s" % (detector_name, min_prob))
-    #             print("max prob for `%s`: %s" % (detector_name, max_prob))
+    #             _print("min prob for `%s`: %s" % (detector_name, min_prob))
+    #             _print("max prob for `%s`: %s" % (detector_name, max_prob))
     #             clr_norm = colors.LogNorm(min_prob, max_prob)
     #             for i, t in enumerate(tiles_to_plot[0:num_tiles]):
     #                 if t.ra_deg < 358 and t.ra_deg > 2:
@@ -809,8 +834,8 @@ class Teglon:
     #             plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
     #                                                   linewidths=0.2, alpha=0.3)
     #         except Exception as e:
-    #             print("Failure in astroplan! Exception: %s" % e)
-    #             print("\n****** Proceeding without Sun Contours! *******\n")
+    #             _print("Failure in astroplan! Exception: %s" % e)
+    #             _print("\n****** Proceeding without Sun Contours! *******\n")
 
     #     output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
     #     if not plot_all:
@@ -820,7 +845,7 @@ class Teglon:
     #     fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
     #     chmod_outputfile(output_path)
     #     plt.close('all')
-    #     print("... Done.")
+    #     _print("... Done.")
 
     def plot_teglon(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", tele="a", band="r", extinct=0.5, tile_file="{FILENAME}", num_tiles=1000, cum_prob_outer=0.9, cum_prob_inner=0.5):
         #DARC MODIFICATION TO PRINT THE INFORMATIONS WHEN I RUN THE CODE OF PLOTTING
@@ -829,7 +854,7 @@ class Teglon:
         nside128 = 128
     
         # Set up external resource directories
-        utilities_base_dir = "/app/web/src/utilities"
+        utilities_base_dir = _UTILITIES_DIR
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
     
         detector_mapping = {
@@ -859,26 +884,26 @@ class Teglon:
         }
     
         # Parameter checks
-        print("\n\n**************************\nChecking Parameters...")
+        _print("\n\n**************************\nChecking Parameters...")
         if gw_id == "":
             is_error = True
-            print("GWID is required.")
+            _print("GWID is required.")
     
         if band not in band_mapping:
             is_error = True
-            print("Invalid band selection. Available bands: %s" % band_mapping.keys())
+            _print("Invalid band selection. Available bands: %s" % band_mapping.keys())
     
         if tele not in detector_mapping:
             is_error = True
-            print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+            _print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
     
         if is_error:
-            print("\n\nErrors! See above output.")
-            print("Exiting...")
-            print("\n**************************")
+            _print("\n\nErrors! See above output.")
+            _print("Exiting...")
+            _print("\n**************************")
             return 1
         else:
-            print("Checked!\n**************************")
+            _print("Checked!\n**************************")
     
         formatted_healpix_dir = healpix_dir
         formatted_healpix_dir = formatted_healpix_dir.replace("{GWID}", gw_id)
@@ -974,7 +999,7 @@ class Teglon:
         # Following the procedure from: https://emfollow.docs.ligo.org/userguide/tutorial/skymaps.html
         # =====================================================================
     
-        print("\n\n**************************\nCalculating Sky Localization Areas...")
+        _print("\n\n**************************\nCalculating Sky Localization Areas...")
     
         # Calculate credible levels for 2D probability map
         i_2d = np.flipud(np.argsort(map_2d_pix))
@@ -1001,15 +1026,15 @@ class Teglon:
         area_4d_50 = np.sum(credible_levels_4d <= 0.5) * pixel_area_sq_deg
     
         # Print results
-        print(f"\n2D Sky Localization Area (Original):")
-        print(f"\t90% Credible Region: {area_2d_90:.2f} sq. deg")
-        print(f"\t50% Credible Region: {area_2d_50:.2f} sq. deg")
+        _print(f"\n2D Sky Localization Area (Original):")
+        _print(f"\t90% Credible Region: {area_2d_90:.2f} sq. deg")
+        _print(f"\t50% Credible Region: {area_2d_50:.2f} sq. deg")
     
-        print(f"\n4D Sky Localization Area (Resampled):")
-        print(f"\t90% Credible Region: {area_4d_90:.2f} sq. deg")
-        print(f"\t50% Credible Region: {area_4d_50:.2f} sq. deg")
+        _print(f"\n4D Sky Localization Area (Resampled):")
+        _print(f"\t90% Credible Region: {area_4d_90:.2f} sq. deg")
+        _print(f"\t50% Credible Region: {area_4d_50:.2f} sq. deg")
     
-        print("\n**************************\n")
+        _print("\n**************************\n")
     
         # Optional: Store results in a dictionary for later use
         sky_localization_areas = {
@@ -1036,17 +1061,17 @@ class Teglon:
                                      alpha=0.75)
     
         # Dust
-        print("\tLoading existing mwe...")
+        _print("\tLoading existing mwe...")
         ebv = None
         if os.path.exists(pickle_output_dir + "ebv.pkl"):
             with open(pickle_output_dir + "ebv.pkl", 'rb') as handle:
                 ebv = pickle.load(handle)
         else:
-            print('ebv.pkl does not exist! Creating...')
+            _print('ebv.pkl does not exist! Creating...')
             theta, phi = hp.pix2ang(nside=nside128, ipix=np.arange(hp.nside2npix(nside128)))
             pix_coord = coord.SkyCoord(ra=np.rad2deg(phi), dec=np.rad2deg(0.5 * np.pi - theta), unit=(u.deg, u.deg))
     
-            print("Retrieving dust info")
+            _print("Retrieving dust info")
             sfd = SFDQuery()
             ebv = sfd(pix_coord)
     
@@ -1124,8 +1149,8 @@ class Teglon:
     
                 min_prob = np.min(tiles["Prob"])
                 max_prob = np.max(tiles["Prob"])
-                print("min prob for `%s`: %s" % (detector_name, min_prob))
-                print("max prob for `%s`: %s" % (detector_name, max_prob))
+                _print("min prob for `%s`: %s" % (detector_name, min_prob))
+                _print("max prob for `%s`: %s" % (detector_name, max_prob))
                 clr_norm = colors.LogNorm(min_prob, max_prob)
                 for i, t in enumerate(tiles_to_plot[0:num_tiles]):
                     if t.ra_deg < 358 and t.ra_deg > 2:
@@ -1177,8 +1202,8 @@ class Teglon:
                 plot_axes[detector_name].contourf_hpx(net_airmass, colors='gray', levels=[2.0, np.max(net_airmass)],
                                                       linewidths=0.2, alpha=0.3)
             except Exception as e:
-                print("Failure in astroplan! Exception: %s" % e)
-                print("\n****** Proceeding without Sun Contours! *******\n")
+                _print("Failure in astroplan! Exception: %s" % e)
+                _print("\n****** Proceeding without Sun Contours! *******\n")
     
         output_file = "all_telescopes_4D_0.9_%s.svg" % healpix_file
         if not plot_all:
@@ -1188,14 +1213,14 @@ class Teglon:
         fig.savefig(output_path, bbox_inches='tight', format="svg")  # ,dpi=840
         chmod_outputfile(output_path)
         plt.close('all')
-        print("... Done.")
+        _print("... Done.")
 
     def load_map(self, gw_id, healpix_dir='./web/events/{GWID}', healpix_file="bayestar.fits.gz", analysis_mode=False,
                  clobber=False, skip_swope=False, skip_thacher=False, skip_t80=False, skip_newfirm=False,
                  t_0_override=None):
 
         api_endpoint = "https://gracedb.ligo.org/api/"
-        utilities_base_dir = "/app/web/src/utilities"
+        utilities_base_dir = _UTILITIES_DIR
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
 
         isDEBUG = False
@@ -1213,7 +1238,7 @@ class Teglon:
         # Parameter checks
         if gw_id == "":
             is_error = True
-            print("GWID is required.")
+            _print("GWID is required.")
 
         formatted_healpix_dir = healpix_dir
         formatted_candidates_dir = healpix_dir + "/candidates"
@@ -1229,7 +1254,7 @@ class Teglon:
 
         if healpix_file == "":
             is_error = True
-            print("You must specify which healpix file to process.")
+            _print("You must specify which healpix file to process.")
 
         map_check = query_db([healpix_map_select % (gw_id, healpix_file)])[0]
         if len(map_check) > 0:
@@ -1237,7 +1262,7 @@ class Teglon:
             current_map_id = map_check[0][0]
 
             if clobber:
-                print(
+                _print(
                     "\n************ The combination of GWID `%s` and healpix file `%s` already exists in the db.************ \nClobbering...")
                 # Delete the map in the db...
 
@@ -1256,29 +1281,29 @@ class Teglon:
                 query_db([delete_map], commit=True)
                 query_db([unlock_tables], commit=True)
 
-                print(
+                _print(
                     "\n************ Map ID `%s` has been deleted, proceeding with load_map...************\n" % current_map_id)
 
             else:
                 is_error = True
-                print("The combination of GWID `%s` and healpix file `%s` already exists in the db. Please choose a "
+                _print("The combination of GWID `%s` and healpix file `%s` already exists in the db. Please choose a "
                       "unique combination." % (gw_id, healpix_file))
 
         if skip_swope:
-            print("**** Not registering Swope tiles for this event! ****")
+            _print("**** Not registering Swope tiles for this event! ****")
 
         if skip_thacher:
-            print("**** Not registering Thacher tiles for this event! ****")
+            _print("**** Not registering Thacher tiles for this event! ****")
 
         # Only build tile-pixel relations if we don't skip both Swope AND Thacher
         if skip_swope and skip_thacher:
             build_tile_pixel_relation = False
 
         if not build_tile_pixel_relation:
-            print("**** Skipping tile-pixel relations entirely! ****")
+            _print("**** Skipping tile-pixel relations entirely! ****")
 
         if is_error:
-            print("Exiting...")
+            _print("Exiting...")
             return 1
 
         ### Quantities that are required ###
@@ -1296,19 +1321,19 @@ class Teglon:
 
         # Can I remove this?
         if not build_map:
-            print("Skipping build map...")
-            print("\tLoading existing map from disk...")
+            _print("Skipping build map...")
+            _print("\tLoading existing map from disk...")
             orig_prob, orig_distmu, orig_distsigma, orig_distnorm, header_gen = hp.read_map(hpx_path,
                                                                                             field=(0, 1, 2, 3), h=True)
 
             orig_npix = len(orig_prob)
-            print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
+            _print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
 
             orig_map_nside = hp.npix2nside(orig_npix)
 
             # Check if NSIDE is > 256. If it is, and the --orig_res flag is not specified, rescale map to NSIDE 256
             if orig_map_nside > nside256 and not analysis_mode:
-                print("Rescaling map to NSIDE = 256")
+                _print("Rescaling map to NSIDE = 256")
                 rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
                                                                                                      orig_distmu,
                                                                                                      orig_distsigma,
@@ -1317,15 +1342,15 @@ class Teglon:
                                                                                                     order_in="RING",
                                                                                                     order_out="RING")
                 rescaled_npix = len(rescaled_prob)
-                print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
+                _print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
 
                 rescaled_map_nside = hp.npix2nside(rescaled_npix)
-                print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
+                _print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
 
                 original_pix_per_rescaled_pix = orig_npix / rescaled_npix
-                print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
+                _print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
 
-                print("Renormalizing and initializing rescaled map...")
+                _print("Renormalizing and initializing rescaled map...")
                 rescaled_prob = rescaled_prob * original_pix_per_rescaled_pix
 
                 prob = rescaled_prob
@@ -1334,45 +1359,45 @@ class Teglon:
                 distnorm = rescaled_distnorm
                 map_nside = rescaled_map_nside
             else:
-                print("##### Loading ORIGINAL RESOLUTION MAP @ NSIDE = %s #####" % orig_map_nside)
+                _print("##### Loading ORIGINAL RESOLUTION MAP @ NSIDE = %s #####" % orig_map_nside)
                 prob = orig_prob
                 distmu = orig_distmu
                 distsigma = orig_distsigma
                 distnorm = orig_distnorm
                 map_nside = orig_map_nside
 
-            print("Getting map id")
+            _print("Getting map id")
             healpix_map_id = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0][0]
-            print("Done map id")
+            _print("Done map id")
         else:
-            print("Building map...")
+            _print("Building map...")
             # Create target directory if it doesn't already exist...
             if not os.path.exists(formatted_healpix_dir):
                 os.mkdir(formatted_healpix_dir)
-                print("\n\nDirectory ", formatted_healpix_dir, " Created ")
+                _print("\n\nDirectory ", formatted_healpix_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_healpix_dir, " already exists")
+                _print("\n\nDirectory ", formatted_healpix_dir, " already exists")
             chmod_outputfile(formatted_healpix_dir)
 
             if not os.path.exists(formatted_candidates_dir):
                 os.mkdir(formatted_candidates_dir)
-                print("\n\nDirectory ", formatted_candidates_dir, " Created ")
+                _print("\n\nDirectory ", formatted_candidates_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_candidates_dir, " already exists")
+                _print("\n\nDirectory ", formatted_candidates_dir, " already exists")
             chmod_outputfile(formatted_candidates_dir)
 
             if not os.path.exists(formatted_obs_tiles_dir):
                 os.mkdir(formatted_obs_tiles_dir)
-                print("\n\nDirectory ", formatted_obs_tiles_dir, " Created ")
+                _print("\n\nDirectory ", formatted_obs_tiles_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_obs_tiles_dir, " already exists")
+                _print("\n\nDirectory ", formatted_obs_tiles_dir, " already exists")
             chmod_outputfile(formatted_obs_tiles_dir)
 
             if not os.path.exists(formatted_model_dir):
                 os.mkdir(formatted_model_dir)
-                print("\n\nDirectory ", formatted_model_dir, " Created ")
+                _print("\n\nDirectory ", formatted_model_dir, " Created ")
             else:
-                print("\n\nDirectory ", formatted_model_dir, " already exists")
+                _print("\n\nDirectory ", formatted_model_dir, " already exists")
             chmod_outputfile(formatted_model_dir)
 
             try:
@@ -1382,7 +1407,7 @@ class Teglon:
                     # Local skymap + explicit event time: skip GraceDB entirely. This enables
                     # non-superevents (e.g. GW170817) and fully-offline/local maps. Backward
                     # compatible: with the default t_0_override=None the GraceDB path below runs.
-                    print("Using local skymap `%s` and provided t_0=%s (skipping GraceDB)." % (
+                    _print("Using local skymap `%s` and provided t_0=%s (skipping GraceDB)." % (
                         hpx_path, t_0_override))
                     far = None
                     t_0 = float(t_0_override)
@@ -1411,31 +1436,31 @@ class Teglon:
                         # GraceDB has no match (e.g. GWTC-1 events like GW170817, which are
                         # not superevents). Fall back to the GWOSC event API for the GPS time
                         # (+ a HEALPix FITS if GWOSC publishes one for this catalog).
-                        print("GraceDB lookup failed for `%s` (%s). Trying GWOSC..." % (gw_id, gdb_err))
+                        _print("GraceDB lookup failed for `%s` (%s). Trying GWOSC..." % (gw_id, gdb_err))
                         gwosc = fetch_gwosc_event(gw_id)
                         if gwosc is None or gwosc.get("gps") is None:
-                            print("No GWOSC record for `%s` either. Exiting..." % gw_id)
+                            _print("No GWOSC record for `%s` either. Exiting..." % gw_id)
                             return 1
                         t_0 = float(t_0_override) if t_0_override is not None else float(gwosc["gps"])
                         gw_url = gwosc.get("jsonurl") or ""
-                        print("GWOSC match: %s  GPS=%s  gracedb_id=%s" % (
+                        _print("GWOSC match: %s  GPS=%s  gracedb_id=%s" % (
                             gw_id, gwosc.get("gps"), gwosc.get("gracedb_id")))
                         if not os.path.exists(hpx_path):
                             if gwosc.get("skymap_url"):
-                                print("Downloading skymap from GWOSC: %s" % gwosc["skymap_url"])
+                                _print("Downloading skymap from GWOSC: %s" % gwosc["skymap_url"])
                                 urllib.request.urlretrieve(gwosc["skymap_url"], hpx_path)
                                 chmod_outputfile(hpx_path)
                             else:
-                                print("GWOSC has no HEALPix skymap for `%s` (posterior samples "
+                                _print("GWOSC has no HEALPix skymap for `%s` (posterior samples "
                                       "only). Place the FITS at `%s` and re-run." % (gw_id, hpx_path))
                                 return 1
                         else:
-                            print("Using local skymap `%s` with GWOSC t_0=%s." % (hpx_path, t_0))
+                            _print("Using local skymap `%s` with GWOSC t_0=%s." % (hpx_path, t_0))
 
                     t_0_time_obj = Time(t_0, scale="utc", format="gps")
                     t_0_datetime_str = t_0_time_obj.to_value(format="iso")
 
-                # print("Downloading `%s`..." % healpix_file)
+                # _print("Downloading `%s`..." % healpix_file)
                 # t1 = time.time()
                 # gw_file_formatter = "https://gracedb.ligo.org/apiweb/superevents/%s/files/%s"
                 # gw_file = gw_file_formatter % (gw_id, healpix_file)
@@ -1446,32 +1471,32 @@ class Teglon:
 
                 t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("Downloading `%s` - execution time: %s" % (healpix_file, (t2 - t1)))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("Downloading `%s` - execution time: %s" % (healpix_file, (t2 - t1)))
+                _print("********* end DEBUG ***********\n")
 
             except urllib.error.HTTPError as e:
-                print("\nError:")
-                print(e.code, healpix_file)
-                print("\n\tExiting...")
+                _print("\nError:")
+                _print(e.code, healpix_file)
+                _print("\n\tExiting...")
                 return 1
             except urllib.error.URLError as e:
-                print("\nError:")
+                _print("\nError:")
                 if hasattr(e, 'reason'):
-                    print(e.reason, healpix_file)
+                    _print(e.reason, healpix_file)
                 elif hasattr(e, 'code'):
-                    print(e.code, healpix_file)
-                print("\n\tExiting...")
+                    _print(e.code, healpix_file)
+                _print("\n\tExiting...")
                 return 1
             except Error as e:
-                print("\nError:")
-                print(e)
-                print("\n\tExiting...")
+                _print("\nError:")
+                _print(e)
+                _print("\n\tExiting...")
                 return 1
 
             # Get event details from GraceDB page
             # try:
-            #     print("Scraping `%s` details..." % gw_id)
+            #     _print("Scraping `%s` details..." % gw_id)
             #     t1 = time.time()
             #     gw_url_formatter = "https://gracedb.ligo.org/superevents/%s/view/"
             #     gw_url = gw_url_formatter % gw_id
@@ -1499,31 +1524,31 @@ class Teglon:
             #
             #
             #     t2 = time.time()
-            #     print("\n********* start DEBUG ***********")
-            #     print("Scraping `%s` details - execution time: %s" % (gw_id, (t2 - t1)))
-            #     print("********* end DEBUG ***********\n")
+            #     _print("\n********* start DEBUG ***********")
+            #     _print("Scraping `%s` details - execution time: %s" % (gw_id, (t2 - t1)))
+            #     _print("********* end DEBUG ***********\n")
             #
             # except urllib.error.HTTPError as e:
-            #     print("\nError:")
-            #     print(e.code, healpix_file)
-            #     print("\n\tExiting...")
+            #     _print("\nError:")
+            #     _print(e.code, healpix_file)
+            #     _print("\n\tExiting...")
             #     return 1
             # except urllib.error.URLError as e:
-            #     print("\nError:")
+            #     _print("\nError:")
             #     if hasattr(e, 'reason'):
-            #         print(e.reason, healpix_file)
+            #         _print(e.reason, healpix_file)
             #     elif hasattr(e, 'code'):
-            #         print(e.code, healpix_file)
-            #     print("\n\tExiting...")
+            #         _print(e.code, healpix_file)
+            #     _print("\n\tExiting...")
             #     return 1
             # except Error as e:
-            #     print("\nError:")
-            #     print(e)
-            #     print("\n\tExiting...")
+            #     _print("\nError:")
+            #     _print(e)
+            #     _print("\n\tExiting...")
             #     return 1
 
             # Unpack healpix file and insert map into db
-            print("Unpacking '%s':%s..." % (gw_id, healpix_file))
+            _print("Unpacking '%s':%s..." % (gw_id, healpix_file))
             t1 = time.time()
 
             (orig_prob, orig_distmu, orig_distsigma, orig_distnorm), header_gen = hp.read_map(hpx_path,
@@ -1532,18 +1557,18 @@ class Teglon:
 
             header = dict(header_gen)
             orig_npix = len(orig_prob)
-            print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
+            _print("\tOriginal number of pix in '%s': %s" % (healpix_file, orig_npix))
 
             sky_area = 4 * 180 ** 2 / np.pi
             area_per_orig_px = sky_area / orig_npix
-            print("\tSky Area per original pix in '%s': %s [sq deg]" % (healpix_file, area_per_orig_px))
+            _print("\tSky Area per original pix in '%s': %s [sq deg]" % (healpix_file, area_per_orig_px))
 
             orig_map_nside = hp.npix2nside(orig_npix)
-            print("\tOriginal resolution (nside) of '%s': %s\n" % (healpix_file, orig_map_nside))
+            _print("\tOriginal resolution (nside) of '%s': %s\n" % (healpix_file, orig_map_nside))
 
             # Check if NSIDE is > 256. If it is, and the --orig_res flag is not specified, rescale map to NSIDE 256
             if orig_map_nside > nside256 and not analysis_mode:
-                print("Rescaling map to NSIDE = 256")
+                _print("Rescaling map to NSIDE = 256")
                 rescaled_prob, rescaled_distmu, rescaled_distsigma, rescaled_distnorm = hp.ud_grade([orig_prob,
                                                                                                      orig_distmu,
                                                                                                      orig_distsigma,
@@ -1552,18 +1577,18 @@ class Teglon:
                                                                                                     order_in="RING",
                                                                                                     order_out="RING")
                 rescaled_npix = len(rescaled_prob)
-                print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
+                _print("\tRescaled number of pix in '%s': %s" % (healpix_file, rescaled_npix))
 
                 area_per_rescaled_px = sky_area / rescaled_npix
-                print("\tSky Area per rescaled pix in '%s': %s [sq deg]" % (healpix_file, area_per_rescaled_px))
+                _print("\tSky Area per rescaled pix in '%s': %s [sq deg]" % (healpix_file, area_per_rescaled_px))
 
                 rescaled_map_nside = hp.npix2nside(rescaled_npix)
-                print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
+                _print("\tRescaled resolution (nside) of '%s': %s\n" % (healpix_file, rescaled_map_nside))
 
                 original_pix_per_rescaled_pix = orig_npix / rescaled_npix
-                print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
+                _print("Original pix per rescaled pix for %s" % original_pix_per_rescaled_pix)
 
-                print("Renormalizing and initializing rescaled map...")
+                _print("Renormalizing and initializing rescaled map...")
                 rescaled_prob = rescaled_prob * original_pix_per_rescaled_pix
 
                 prob = rescaled_prob
@@ -1572,7 +1597,7 @@ class Teglon:
                 distnorm = rescaled_distnorm
                 map_nside = rescaled_map_nside
             else:
-                print("##### Loading ORIGINAL RESOLUTION MAP @ NSIDE = %s #####" % orig_map_nside)
+                _print("##### Loading ORIGINAL RESOLUTION MAP @ NSIDE = %s #####" % orig_map_nside)
 
                 prob = orig_prob
                 distmu = orig_distmu
@@ -1590,21 +1615,21 @@ class Teglon:
             healpix_map_data = [(gw_id, gw_url, healpix_file, orig_map_nside, t_0,
                                  t_0_datetime_str, 0.0, map_nside)]
 
-            print("\nInserting %s Healpix Map: %s ..." % (gw_id, healpix_file))
+            _print("\nInserting %s Healpix Map: %s ..." % (gw_id, healpix_file))
             insert_records(healpix_map_insert, healpix_map_data)
             healpix_map_id = query_db([healpix_map_select % (gw_id, healpix_file)])[0][0][0]
-            print("...Done")
+            _print("...Done")
 
         if not build_pixels:
-            print("Skipping pixels...")
-            print("\tLoading NSIDE 128 pixels...")
+            _print("Skipping pixels...")
+            _print("\tLoading NSIDE 128 pixels...")
             with open(pickle_output_dir + 'N128_dict.pkl', 'rb') as handle:
                 N128_dict = pickle.load(handle)
             del handle
 
             t1 = time.time()
 
-            print("Get map pixel")
+            _print("Get map pixel")
             map_pixel_select = '''SELECT 
                 id, HealpixMap_id, Pixel_Index, Prob, Distmu, Distsigma, 
                 Distnorm, Mean, Stddev, Norm, N128_SkyPixel_id 
@@ -1617,20 +1642,20 @@ class Teglon:
                 map_pixel_dict[int(p[2])] = p
 
             # clean up
-            print("freeing `map_pixels`...")
+            _print("freeing `map_pixels`...")
             del map_pixels
 
             process = psutil.Process(os.getpid())
             mb = process.memory_info().rss / 1e+6
-            print("Total mem usage: %0.3f [MB]" % mb)
-            print("\n*****************************")
+            _print("Total mem usage: %0.3f [MB]" % mb)
+            _print("\n*****************************")
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Pixel select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Pixel select execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
         else:
-            print("Building pixels...")
+            _print("Building pixels...")
             # Process healpix pixels and bulk insert into db. To do this, `LOAD DATA LOCAL INFILE` must be enabled in MySQL.
             # The pixels are unpacked, associated with NSIDE 128 pixels, their LIGO distance distributions are resolved,
             # and finally they are written to the working directory as a CSV that is bulk uploaded to the db. Clean up the file
@@ -1643,7 +1668,7 @@ class Teglon:
             t1 = time.time()
             N128_select = "SELECT id, Pixel_Index FROM SkyPixel WHERE NSIDE = 128;"
             N128_result = query_db([N128_select])[0]
-            print("Number of NSIDE 128 sky pixels: %s" % len(N128_result))
+            _print("Number of NSIDE 128 sky pixels: %s" % len(N128_result))
 
             N128_dict = {}
             for n128 in N128_result:
@@ -1655,13 +1680,13 @@ class Teglon:
             #     del handle
 
             # Clean up N128_result
-            print("freeing `N128_result`...")
+            _print("freeing `N128_result`...")
             del N128_result
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("N128 select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("N128 select execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             mean = None
             stddev = None
@@ -1680,9 +1705,9 @@ class Teglon:
             t1 = time.time()
 
             if analysis_mode:
-                print("\n********* start DEBUG ***********")
-                print("In `Analysis` Mode -- loading all pixels into db...")
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("In `Analysis` Mode -- loading all pixels into db...")
+                _print("********* end DEBUG ***********\n")
 
                 # Don't window the pixel array in "analysis" mode
                 pix_indices = np.where(percentiles <= 1.0)
@@ -1691,9 +1716,9 @@ class Teglon:
                 cleaned_distsigma = distsigma
                 cleaned_distnorm = distnorm
             else:
-                print("\n********* start DEBUG ***********")
-                print("In `Search` Mode -- loading 90th percentile pixels into db...")
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("In `Search` Mode -- loading 90th percentile pixels into db...")
+                _print("********* end DEBUG ***********\n")
 
                 # Window the pixel array when we're in default "search" mode
                 pix_indices = np.where(percentiles <= 0.91)
@@ -1722,36 +1747,36 @@ class Teglon:
                                            stddev[i], norm[i], N128_pixel_id))
 
             # Clean up
-            print("freeing `theta`...")
-            print("freeing `phi`...")
-            print("freeing `N128_indices`...")
+            _print("freeing `theta`...")
+            _print("freeing `phi`...")
+            _print("freeing `N128_indices`...")
             del theta
             del phi
             del N128_indices
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Distance resolution execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Distance resolution execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             # Create CSV, upload, and clean up CSV
             upload_csv = "%s/%s_bulk_upload.csv" % (formatted_healpix_dir, gw_id)
             try:
                 t1 = time.time()
-                print("Creating `%s`" % upload_csv)
+                _print("Creating `%s`" % upload_csv)
                 with open(upload_csv, 'w') as csvfile:
                     csvwriter = csv.writer(csvfile)
                     for data in healpix_pixel_data:
                         csvwriter.writerow(data)
 
                 t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("CSV creation execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("CSV creation execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
             except Error as e:
-                print("Error in creating CSV:\n")
-                print(e)
-                print("\nExiting")
+                _print("Error in creating CSV:\n")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             t1 = time.time()
@@ -1763,26 +1788,26 @@ class Teglon:
 
             success = bulk_upload(upload_sql % upload_csv)
             if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
+                _print("\nUnsuccessful bulk upload. Exiting...")
                 return 1
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
+            _print("\n********* start DEBUG ***********")
+            _print("CSV upload execution time: %s" % (t2 - t1))
 
             try:
-                print("Removing `%s`..." % upload_csv)
+                _print("Removing `%s`..." % upload_csv)
                 os.remove(upload_csv)
 
                 # Clean up
-                print("freeing `healpix_pixel_data`...")
+                _print("freeing `healpix_pixel_data`...")
                 del healpix_pixel_data
 
-                print("... Done")
+                _print("... Done")
             except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
+                _print("Error in file removal")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             t1 = time.time()
@@ -1792,27 +1817,27 @@ class Teglon:
             FROM HealpixPixel WHERE HealpixMap_id = %s'''
 
             map_pixels = query_db([map_pixel_select % healpix_map_id])[0]
-            print(len(map_pixels))
+            _print(len(map_pixels))
             map_pixel_dict = {}
             for p in map_pixels:
                 map_pixel_dict[int(p[2])] = p
 
             # Clean up
-            print("freeing `map_pixels`...")
+            _print("freeing `map_pixels`...")
             del map_pixels
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Pixel select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Pixel select execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             with open(pickle_output_dir + 'N128_dict.pkl', 'wb') as handle:
                 pickle.dump(N128_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
         if not build_tile_pixel_relation:
-            print("Skipping tile-pixel relation...")
+            _print("Skipping tile-pixel relation...")
         else:
-            print("Building tile-pixel relation...")
+            _print("Building tile-pixel relation...")
 
             # select_detector_id = "SELECT id, Name, Deg_width, Deg_height, Deg_radius, Area FROM Detector WHERE Name='%s'"
             select_detector = "SELECT id, Name, ST_AsText(Poly) FROM Detector WHERE Name='%s';"
@@ -1838,7 +1863,7 @@ class Teglon:
                     swope_tiles.append(t)
 
                 # clean up
-                print("freeing `swope_static_tile_rows`...")
+                _print("freeing `swope_static_tile_rows`...")
                 del swope_static_tile_rows
 
                 t1 = time.time()
@@ -1848,13 +1873,13 @@ class Teglon:
                     initialized_swope_tiles = pool.map(initialize_tile, swope_tiles)
 
                 # clean up
-                print("freeing `swope_tiles`...")
+                _print("freeing `swope_tiles`...")
                 del swope_tiles
                 t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("Swope Tile initialization execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("Swope Tile initialization execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
 
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_swope_tiles:
@@ -1865,24 +1890,24 @@ class Teglon:
                 # Create CSV
                 try:
                     t1 = time.time()
-                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    _print("Appending `%s`" % tile_pixel_upload_csv)
                     with open(tile_pixel_upload_csv, 'a') as csvfile:
                         csvwriter = csv.writer(csvfile)
                         for data in tile_pixel_data:
                             csvwriter.writerow(data)
 
                     t2 = time.time()
-                    print("\n********* start DEBUG ***********")
-                    print("Tile-Pixel CSV creation execution time: %s" % (t2 - t1))
-                    print("********* end DEBUG ***********\n")
+                    _print("\n********* start DEBUG ***********")
+                    _print("Tile-Pixel CSV creation execution time: %s" % (t2 - t1))
+                    _print("********* end DEBUG ***********\n")
                 except Error as e:
-                    print("Error in creating Tile-Pixel CSV:\n")
-                    print(e)
-                    print("\nExiting")
+                    _print("Error in creating Tile-Pixel CSV:\n")
+                    _print(e)
+                    _print("\nExiting")
                     return 1
 
                 # clean up
-                print("freeing `tile_pixel_data`...")
+                _print("freeing `tile_pixel_data`...")
                 del tile_pixel_data
 
             tile_pixel_data = []
@@ -1904,7 +1929,7 @@ class Teglon:
                     thacher_tiles.append(t)
 
                 # clean up
-                print("freeing `thacher_static_tile_rows`...")
+                _print("freeing `thacher_static_tile_rows`...")
                 del thacher_static_tile_rows
 
                 t1 = time.time()
@@ -1914,13 +1939,13 @@ class Teglon:
                     initialized_thacher_tiles = pool.map(initialize_tile, thacher_tiles)
 
                 # clean up
-                print("freeing `thacher_tiles`...")
+                _print("freeing `thacher_tiles`...")
                 del thacher_tiles
                 t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("Thacher Tile initialization execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("Thacher Tile initialization execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
 
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_thacher_tiles:
@@ -1931,20 +1956,20 @@ class Teglon:
                 # Append to existing CSV, upload, and clean up CSV
                 try:
                     t1 = time.time()
-                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    _print("Appending `%s`" % tile_pixel_upload_csv)
                     with open(tile_pixel_upload_csv, 'a') as csvfile:
                         csvwriter = csv.writer(csvfile)
                         for data in tile_pixel_data:
                             csvwriter.writerow(data)
 
                     t2 = time.time()
-                    print("\n********* start DEBUG ***********")
-                    print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
-                    print("********* end DEBUG ***********\n")
+                    _print("\n********* start DEBUG ***********")
+                    _print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
+                    _print("********* end DEBUG ***********\n")
                 except Error as e:
-                    print("Error in creating Tile-Pixel CSV:\n")
-                    print(e)
-                    print("\nExiting")
+                    _print("Error in creating Tile-Pixel CSV:\n")
+                    _print(e)
+                    _print("\nExiting")
                     return 1
 
             tile_pixel_data = []
@@ -1966,7 +1991,7 @@ class Teglon:
                     t80_tiles.append(t)
 
                 # clean up
-                print("freeing `t80_static_tile_rows`...")
+                _print("freeing `t80_static_tile_rows`...")
                 del t80_static_tile_rows
 
                 t1 = time.time()
@@ -1976,13 +2001,13 @@ class Teglon:
                     initialized_t80_tiles = pool.map(initialize_tile, t80_tiles)
 
                 # clean up
-                print("freeing `t80_tiles`...")
+                _print("freeing `t80_tiles`...")
                 del t80_tiles
                 t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("T80 Tile initialization execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("T80 Tile initialization execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
 
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_t80_tiles:
@@ -1993,20 +2018,20 @@ class Teglon:
                 # Append to existing CSV, upload, and clean up CSV
                 try:
                     t1 = time.time()
-                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    _print("Appending `%s`" % tile_pixel_upload_csv)
                     with open(tile_pixel_upload_csv, 'a') as csvfile:
                         csvwriter = csv.writer(csvfile)
                         for data in tile_pixel_data:
                             csvwriter.writerow(data)
 
                     t2 = time.time()
-                    print("\n********* start DEBUG ***********")
-                    print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
-                    print("********* end DEBUG ***********\n")
+                    _print("\n********* start DEBUG ***********")
+                    _print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
+                    _print("********* end DEBUG ***********\n")
                 except Error as e:
-                    print("Error in creating Tile-Pixel CSV:\n")
-                    print(e)
-                    print("\nExiting")
+                    _print("Error in creating Tile-Pixel CSV:\n")
+                    _print(e)
+                    _print("\nExiting")
                     return 1
 
             tile_pixel_data = []
@@ -2028,7 +2053,7 @@ class Teglon:
                     newfirm_tiles.append(t)
 
                 # clean up
-                print("freeing `newfirm_static_tile_rows`...")
+                _print("freeing `newfirm_static_tile_rows`...")
                 del newfirm_static_tile_rows
 
                 t1 = time.time()
@@ -2038,13 +2063,13 @@ class Teglon:
                     initialized_newfirm_tiles = pool.map(initialize_tile, newfirm_tiles)
 
                 # clean up
-                print("freeing `newfirm_tiles`...")
+                _print("freeing `newfirm_tiles`...")
                 del newfirm_tiles
                 t2 = time.time()
 
-                print("\n********* start DEBUG ***********")
-                print("NEWFIRM Tile initialization execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("NEWFIRM Tile initialization execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
 
                 # Insert Tile/Healpix pixel relations
                 for t in initialized_newfirm_tiles:
@@ -2055,24 +2080,24 @@ class Teglon:
                 # Append to existing CSV, upload, and clean up CSV
                 try:
                     t1 = time.time()
-                    print("Appending `%s`" % tile_pixel_upload_csv)
+                    _print("Appending `%s`" % tile_pixel_upload_csv)
                     with open(tile_pixel_upload_csv, 'a') as csvfile:
                         csvwriter = csv.writer(csvfile)
                         for data in tile_pixel_data:
                             csvwriter.writerow(data)
 
                     t2 = time.time()
-                    print("\n********* start DEBUG ***********")
-                    print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
-                    print("********* end DEBUG ***********\n")
+                    _print("\n********* start DEBUG ***********")
+                    _print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
+                    _print("********* end DEBUG ***********\n")
                 except Error as e:
-                    print("Error in creating Tile-Pixel CSV:\n")
-                    print(e)
-                    print("\nExiting")
+                    _print("Error in creating Tile-Pixel CSV:\n")
+                    _print(e)
+                    _print("\nExiting")
                     return 1
 
         if build_tile_pixel_relation:
-            print("Bulk uploading Tile-Pixel...")
+            _print("Bulk uploading Tile-Pixel...")
             t1 = time.time()
             st_hp_upload_sql = """LOAD DATA LOCAL INFILE '%s' 
                                 INTO TABLE StaticTile_HealpixPixel 
@@ -2082,33 +2107,33 @@ class Teglon:
 
             success = bulk_upload(st_hp_upload_sql % tile_pixel_upload_csv)
             if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
+                _print("\nUnsuccessful bulk upload. Exiting...")
                 return 1
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
+            _print("\n********* start DEBUG ***********")
+            _print("Tile-Pixel CSV upload execution time: %s" % (t2 - t1))
 
             try:
-                print("Removing `%s`..." % tile_pixel_upload_csv)
+                _print("Removing `%s`..." % tile_pixel_upload_csv)
                 os.remove(tile_pixel_upload_csv)
 
                 # clean up
-                print("freeing `tile_pixel_data`...")
+                _print("freeing `tile_pixel_data`...")
                 del tile_pixel_data
 
-                print("... Done")
+                _print("... Done")
             except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
+                _print("Error in file removal")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             if not build_galaxy_pixel_relation:
-                print("Skipping galaxy-pixel relation...")
+                _print("Skipping galaxy-pixel relation...")
             else:
                 pass
-                # print("Building galaxy-pixel relation...")
+                # _print("Building galaxy-pixel relation...")
                 # # 1. Select all Galaxies from GD2
                 # # 2. Resolve all Galaxies to a HealpixPixel index/id
                 # # 3. Store HealpixPixel_Galaxy association
@@ -2155,11 +2180,11 @@ class Teglon:
                 #     WHERE z_dist < 1206.0
                 # '''
                 # galaxy_result = query_db([galaxy_select % map_nside])[0]
-                # print("Number of Galaxies: %s" % len(galaxy_result))
+                # _print("Number of Galaxies: %s" % len(galaxy_result))
                 # t2 = time.time()
-                # print("\n********* start DEBUG ***********")
-                # print("Galaxy select execution time: %s" % (t2 - t1))
-                # print("********* end DEBUG ***********\n")
+                # _print("\n********* start DEBUG ***********")
+                # _print("Galaxy select execution time: %s" % (t2 - t1))
+                # _print("********* end DEBUG ***********\n")
                 #
                 # t1 = time.time()
                 #
@@ -2174,28 +2199,28 @@ class Teglon:
                 #     galaxy_pixel_data.append((_pixel_id, _galaxy_id))
                 #
                 # t2 = time.time()
-                # print("\n********* start DEBUG ***********")
-                # print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
-                # print("********* end DEBUG ***********\n")
+                # _print("\n********* start DEBUG ***********")
+                # _print("Galaxy-pixel creation execution time: %s" % (t2 - t1))
+                # _print("********* end DEBUG ***********\n")
                 #
                 # # Create CSV, upload, and clean up CSV
                 # galaxy_pixel_upload_csv = "%s/%s_gal_pix_upload.csv" % (formatted_healpix_dir, gw_id)
                 # try:
                 #     t1 = time.time()
-                #     print("Creating `%s`" % galaxy_pixel_upload_csv)
+                #     _print("Creating `%s`" % galaxy_pixel_upload_csv)
                 #     with open(galaxy_pixel_upload_csv, 'w') as csvfile:
                 #         csvwriter = csv.writer(csvfile)
                 #         for data in galaxy_pixel_data:
                 #             csvwriter.writerow(data)
                 #
                 #     t2 = time.time()
-                #     print("\n********* start DEBUG ***********")
-                #     print("CSV creation execution time: %s" % (t2 - t1))
-                #     print("********* end DEBUG ***********\n")
+                #     _print("\n********* start DEBUG ***********")
+                #     _print("CSV creation execution time: %s" % (t2 - t1))
+                #     _print("********* end DEBUG ***********\n")
                 # except Error as e:
-                #     print("Error in creating CSV:\n")
-                #     print(e)
-                #     print("\nExiting")
+                #     _print("Error in creating CSV:\n")
+                #     _print(e)
+                #     _print("\nExiting")
                 #     return 1
                 #
                 # t1 = time.time()
@@ -2207,35 +2232,35 @@ class Teglon:
                 #
                 # success = bulk_upload(upload_sql % galaxy_pixel_upload_csv)
                 # if not success:
-                #     print("\nUnsuccessful bulk upload. Exiting...")
+                #     _print("\nUnsuccessful bulk upload. Exiting...")
                 #     return 1
                 #
                 # t2 = time.time()
-                # print("\n********* start DEBUG ***********")
-                # print("CSV upload execution time: %s" % (t2 - t1))
+                # _print("\n********* start DEBUG ***********")
+                # _print("CSV upload execution time: %s" % (t2 - t1))
                 #
                 # try:
-                #     print("Removing `%s`..." % galaxy_pixel_upload_csv)
+                #     _print("Removing `%s`..." % galaxy_pixel_upload_csv)
                 #     os.remove(galaxy_pixel_upload_csv)
                 #
                 #     # Clean up
-                #     print("freeing `galaxy_pixel_data`...")
+                #     _print("freeing `galaxy_pixel_data`...")
                 #     del galaxy_pixel_data
                 #
-                #     print("... Done")
+                #     _print("... Done")
                 # except Error as e:
-                #     print("Error in file removal")
-                #     print(e)
-                #     print("\nExiting")
+                #     _print("Error in file removal")
+                #     _print(e)
+                #     _print("\nExiting")
                 #     return 1
 
         # clean up
-        print("freeing `prob`...")
-        print("freeing `distmu`...")
-        print("freeing `distsigma`...")
-        print("freeing `distnorm`...")
-        print("freeing `header_gen`...")
-        # print("freeing `map_pixel_dict`...")
+        _print("freeing `prob`...")
+        _print("freeing `distmu`...")
+        _print("freeing `distsigma`...")
+        _print("freeing `distnorm`...")
+        _print("freeing `header_gen`...")
+        # _print("freeing `map_pixel_dict`...")
         del prob
         del distmu
         del distsigma
@@ -2244,10 +2269,10 @@ class Teglon:
         # del map_pixel_dict
 
         if not build_completeness_func:
-            print("Skipping completeness func...")
+            _print("Skipping completeness func...")
         # else:
         elif False:
-            print("Building completeness func...")
+            _print("Building completeness func...")
 
             pixel_completeness_upload_csv = "%s/%s_pixel_completeness_upload.csv" % (
                 formatted_healpix_dir, gw_id)
@@ -2295,7 +2320,7 @@ class Teglon:
                                   N128_dict.items()]  # pixel_index, pixel_id are both INT
 
             # clean up
-            print("freeing `N128_dict`...")
+            _print("freeing `N128_dict`...")
             del N128_dict
 
             batch_size = 10000
@@ -2305,10 +2330,10 @@ class Teglon:
 
             process = psutil.Process(os.getpid())
             mb = process.memory_info().rss / 1e+6
-            print("\nTotal mem usage: %0.3f [MB]\n" % mb)
-            print("\nLength of N128 pixels: %s" % k)
-            print("Batch size: %s" % batch_size)
-            print("Starting loop...")
+            _print("\nTotal mem usage: %0.3f [MB]\n" % mb)
+            _print("\nLength of N128 pixels: %s" % k)
+            _print("Batch size: %s" % batch_size)
+            _print("Starting loop...")
 
             number_of_iters = k // batch_size
             if k % batch_size > 0:
@@ -2319,15 +2344,15 @@ class Teglon:
 
                 t1 = time.time()
 
-                print("%s:%s" % (i, j))
+                _print("%s:%s" % (i, j))
                 batch = n128_pixel_id_list[i:j]
                 batch_id_string = ','.join(map(str, batch))
 
                 completeness_result = query_db([completeness_select % batch_id_string])[0]
-                print("Number of completeness records: %s" % len(completeness_result))
+                _print("Number of completeness records: %s" % len(completeness_result))
                 healpix_pixel_completeness_result = \
                     query_db([healpix_pixel_completeness_select % (healpix_map_id, batch_id_string)])[0]
-                print("Number of healpix pixel records: %s" % len(healpix_pixel_completeness_result))
+                _print("Number of healpix pixel records: %s" % len(healpix_pixel_completeness_result))
 
                 i = j
                 j += batch_size
@@ -2350,7 +2375,7 @@ class Teglon:
                     completeness_values_dict[key][1].append(0.0)
 
                 # clean up
-                print("freeing `completeness_result`...")
+                _print("freeing `completeness_result`...")
                 del completeness_result
 
                 pixel_completeness_records = []
@@ -2371,49 +2396,49 @@ class Teglon:
                 try:
                     t1 = time.time()
 
-                    print("Appending `%s`" % pixel_completeness_upload_csv)
+                    _print("Appending `%s`" % pixel_completeness_upload_csv)
                     with open(pixel_completeness_upload_csv, 'a') as csvfile:
                         csvwriter = csv.writer(csvfile)
                         for data in pixel_completeness_records:
                             csvwriter.writerow(data)
 
                     t2 = time.time()
-                    print("\n********* start DEBUG ***********")
-                    print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
-                    print("********* end DEBUG ***********\n")
+                    _print("\n********* start DEBUG ***********")
+                    _print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
+                    _print("********* end DEBUG ***********\n")
                 except Error as e:
-                    print("Error in creating Pixel Completeness CSV:\n")
-                    print(e)
-                    print("\nExiting")
+                    _print("Error in creating Pixel Completeness CSV:\n")
+                    _print(e)
+                    _print("\nExiting")
                     return 1
 
                 # batch_insert(pixel_update, pixel_update_records)
 
                 # clean up
-                print("freeing `completeness_values_dict`...")
-                print("freeing `pixel_completeness_records`...")
-                print("freeing `healpix_pixel_completeness_result`...")
+                _print("freeing `completeness_values_dict`...")
+                _print("freeing `pixel_completeness_records`...")
+                _print("freeing `healpix_pixel_completeness_result`...")
                 del completeness_values_dict
                 del pixel_completeness_records
                 del healpix_pixel_completeness_result
 
                 t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("SELECT %s/%s complete - execution time: %s" % (iter_num, number_of_iters, (t2 - t1)))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("SELECT %s/%s complete - execution time: %s" % (iter_num, number_of_iters, (t2 - t1)))
+                _print("********* end DEBUG ***********\n")
 
                 iter_num += 1
 
                 process = psutil.Process(os.getpid())
                 mb = process.memory_info().rss / 1e+6
-                print("\nTotal mem usage: %0.3f [MB]\n" % mb)
+                _print("\nTotal mem usage: %0.3f [MB]\n" % mb)
 
-            print("Out of loop...")
+            _print("Out of loop...")
 
             # FINISH WORK HERE
             t1 = time.time()
 
-            print("\n%s:%s" % (i, k))
+            _print("\n%s:%s" % (i, k))
             batch = n128_pixel_id_list[i:k]
             batch_id_string = ','.join(map(str, batch))
 
@@ -2438,7 +2463,7 @@ class Teglon:
                 completeness_values_dict[key][1].append(0.0)
 
             # clean up
-            print("freeing `completeness_result`...")
+            _print("freeing `completeness_result`...")
             del completeness_result
 
             pixel_completeness_records = []
@@ -2456,27 +2481,27 @@ class Teglon:
                 pixel_completeness_records.append((pix_id, pix_completeness, renorm2dprob, -1.0, healpix_map_id))
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("SELECT %s/%s complete - execution time: %s" % (iter_num, number_of_iters, (t2 - t1)))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("SELECT %s/%s complete - execution time: %s" % (iter_num, number_of_iters, (t2 - t1)))
+            _print("********* end DEBUG ***********\n")
 
             # Append to data to CSV
             try:
                 t1 = time.time()
-                print("Appending `%s`" % pixel_completeness_upload_csv)
+                _print("Appending `%s`" % pixel_completeness_upload_csv)
                 with open(pixel_completeness_upload_csv, 'a') as csvfile:
                     csvwriter = csv.writer(csvfile)
                     for data in pixel_completeness_records:
                         csvwriter.writerow(data)
 
                 t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
             except Error as e:
-                print("Error in creating Pixel Completeness CSV:\n")
-                print(e)
-                print("\nExiting")
+                _print("Error in creating Pixel Completeness CSV:\n")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             t1 = time.time()
@@ -2488,34 +2513,34 @@ class Teglon:
 
             success = bulk_upload(upload_sql % pixel_completeness_upload_csv)
             if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
+                _print("\nUnsuccessful bulk upload. Exiting...")
                 return 1
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
+            _print("\n********* start DEBUG ***********")
+            _print("CSV upload execution time: %s" % (t2 - t1))
 
             try:
-                print("Removing `%s`..." % pixel_completeness_upload_csv)
+                _print("Removing `%s`..." % pixel_completeness_upload_csv)
                 os.remove(pixel_completeness_upload_csv)
 
                 # clean up
-                print("freeing `completeness_values_dict`...")
-                print("freeing `pixel_completeness_records`...")
-                print("freeing `healpix_pixel_completeness_result`...")
+                _print("freeing `completeness_values_dict`...")
+                _print("freeing `pixel_completeness_records`...")
+                _print("freeing `healpix_pixel_completeness_result`...")
                 del completeness_values_dict
                 del pixel_completeness_records
                 del healpix_pixel_completeness_result
 
-                print("... Done")
+                _print("... Done")
             except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
+                _print("Error in file removal")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
         if not build_completeness_func:
-            print("Alternate completeness func...")
+            _print("Alternate completeness func...")
             t1 = time.time()
             pixel_completeness_upload_csv = "%s/%s_pixel_completeness_upload.csv" % (
                 formatted_healpix_dir, gw_id)
@@ -2538,27 +2563,27 @@ class Teglon:
                 pixel_completeness_records.append((pix_id, pix_completeness, renorm2dprob, -1.0, healpix_map_id))
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Alternate Completeness Calc complete - execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Alternate Completeness Calc complete - execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             # Append to data to CSV
             try:
                 t1 = time.time()
-                print("Appending `%s`" % pixel_completeness_upload_csv)
+                _print("Appending `%s`" % pixel_completeness_upload_csv)
                 with open(pixel_completeness_upload_csv, 'a') as csvfile:
                     csvwriter = csv.writer(csvfile)
                     for data in pixel_completeness_records:
                         csvwriter.writerow(data)
 
                 t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("Pixel Completeness CSV append execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
             except Error as e:
-                print("Error in creating Pixel Completeness CSV:\n")
-                print(e)
-                print("\nExiting")
+                _print("Error in creating Pixel Completeness CSV:\n")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             t1 = time.time()
@@ -2570,37 +2595,37 @@ class Teglon:
 
             success = bulk_upload(upload_sql % pixel_completeness_upload_csv)
             if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
+                _print("\nUnsuccessful bulk upload. Exiting...")
                 return 1
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
+            _print("\n********* start DEBUG ***********")
+            _print("CSV upload execution time: %s" % (t2 - t1))
 
             try:
-                print("Removing `%s`..." % pixel_completeness_upload_csv)
+                _print("Removing `%s`..." % pixel_completeness_upload_csv)
                 os.remove(pixel_completeness_upload_csv)
 
                 # clean up
-                print("freeing `completeness_values_dict`...")
-                print("freeing `pixel_completeness_records`...")
-                print("freeing `healpix_pixel_completeness_result`...")
+                _print("freeing `completeness_values_dict`...")
+                _print("freeing `pixel_completeness_records`...")
+                _print("freeing `healpix_pixel_completeness_result`...")
                 # del completeness_values_dict
                 del composed_completeness_dict
                 del pixel_completeness_records
                 # del healpix_pixel_completeness_result
 
-                print("... Done")
+                _print("... Done")
             except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
+                _print("Error in file removal")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
         if not build_galaxy_weights:
-            print("Skipping galaxy weights ...")
+            _print("Skipping galaxy weights ...")
         else:
-            print("Building galaxy weights ...")
+            _print("Building galaxy weights ...")
 
             t1 = time.time()
             # Set & Retrieve NetProbToGalaxies
@@ -2633,12 +2658,12 @@ class Teglon:
             select_NetProbToGalaxies = "SELECT NetProbToGalaxies FROM HealpixMap WHERE id = %s"
             select_NetProbToGalaxies_result = query_db([select_NetProbToGalaxies % healpix_map_id])[0]
             net_prob_to_galaxies = select_NetProbToGalaxies_result[0][0]
-            print("Net probability to galaxies: %0.5f" % net_prob_to_galaxies)
+            _print("Net probability to galaxies: %0.5f" % net_prob_to_galaxies)
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("healpix_map_NetProbToGalaxies execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("healpix_map_NetProbToGalaxies execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             tt1 = time.time()
 
@@ -2661,9 +2686,9 @@ class Teglon:
             precompute_result = query_db([galaxy_4D_select % ("N%s" % map_nside, healpix_map_id)])[0]
             t2 = time.time()
 
-            print("\n********* start DEBUG ***********")
-            print("Precompute Select execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Precompute Select execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
             galaxy_attributes = []
             four_d_prob_norm = 0.0
@@ -2682,7 +2707,7 @@ class Teglon:
                 galaxy_attributes.append([g_id, hp_id, lum_prob, z_prob, two_d_prob, four_d_prob])
 
             # clean up
-            print("freeing `precompute_result`...")
+            _print("freeing `precompute_result`...")
             del precompute_result
 
             galaxy_attribute_data = []
@@ -2705,7 +2730,7 @@ class Teglon:
                     (g_id, hp_id, lum_prob, z_prob, two_d_prob, norm_4d_weight, net_gal_prob, healpix_map_id))
 
             # clean up
-            print("freeing `galaxy_attributes`...")
+            _print("freeing `galaxy_attributes`...")
             del galaxy_attributes
 
             # Create CSV, upload, and clean up CSV
@@ -2713,20 +2738,20 @@ class Teglon:
                 formatted_healpix_dir, gw_id)
             try:
                 t1 = time.time()
-                print("Creating `%s`" % galaxy_attributes_upload_csv)
+                _print("Creating `%s`" % galaxy_attributes_upload_csv)
                 with open(galaxy_attributes_upload_csv, 'w') as csvfile:
                     csvwriter = csv.writer(csvfile)
                     for data in galaxy_attribute_data:
                         csvwriter.writerow(data)
 
                 t2 = time.time()
-                print("\n********* start DEBUG ***********")
-                print("CSV creation execution time: %s" % (t2 - t1))
-                print("********* end DEBUG ***********\n")
+                _print("\n********* start DEBUG ***********")
+                _print("CSV creation execution time: %s" % (t2 - t1))
+                _print("********* end DEBUG ***********\n")
             except Error as e:
-                print("Error in creating CSV:\n")
-                print(e)
-                print("\nExiting")
+                _print("Error in creating CSV:\n")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             t1 = time.time()
@@ -2738,35 +2763,35 @@ class Teglon:
 
             success = bulk_upload(upload_sql % galaxy_attributes_upload_csv)
             if not success:
-                print("\nUnsuccessful bulk upload. Exiting...")
+                _print("\nUnsuccessful bulk upload. Exiting...")
                 return 1
 
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("CSV upload execution time: %s" % (t2 - t1))
+            _print("\n********* start DEBUG ***********")
+            _print("CSV upload execution time: %s" % (t2 - t1))
 
             try:
-                print("Removing `%s`..." % galaxy_attributes_upload_csv)
+                _print("Removing `%s`..." % galaxy_attributes_upload_csv)
                 os.remove(galaxy_attributes_upload_csv)
 
                 # Clean up
-                print("freeing `galaxy_attribute_data`...")
+                _print("freeing `galaxy_attribute_data`...")
                 del galaxy_attribute_data
 
-                print("... Done")
+                _print("... Done")
             except Error as e:
-                print("Error in file removal")
-                print(e)
-                print("\nExiting")
+                _print("Error in file removal")
+                _print(e)
+                _print("\nExiting")
                 return 1
 
             tt2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("HealpixPixel_Galaxy Galaxy Attribute execution time: %s" % (tt2 - tt1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("HealpixPixel_Galaxy Galaxy Attribute execution time: %s" % (tt2 - tt1))
+            _print("********* end DEBUG ***********\n")
 
             # update the healpix pixel net prob column...
-            print("Updating healpix pixel net prob...")
+            _print("Updating healpix pixel net prob...")
             t1 = time.time()
 
             healpix_pixel_net_prob_update = '''
@@ -2787,9 +2812,9 @@ class Teglon:
 
             query_db([healpix_pixel_net_prob_update % (healpix_map_id, healpix_map_id)], commit=True)
             t2 = time.time()
-            print("\n********* start DEBUG ***********")
-            print("Update HealpixPixel NetProb execution time: %s" % (t2 - t1))
-            print("********* end DEBUG ***********\n")
+            _print("\n********* start DEBUG ***********")
+            _print("Update HealpixPixel NetProb execution time: %s" % (t2 - t1))
+            _print("********* end DEBUG ***********\n")
 
     def add_detector(self, tm_detector_id, min_dec=-90, max_dec=90.0, detector_geometry=None,
                         detector_width=None, detector_height=None, detector_radius=None):
@@ -2804,19 +2829,19 @@ class Teglon:
             tm_api_token = self.config.get('treasuremap', 'TM_API_TOKEN')
             tm_base_url = self.config.get('treasuremap', 'TM_ENDPOINT')
         except:
-            print("Error! No Treasure Map keys (`TM_API_TOKEN`, `TM_ENDPOINT`) in the Settings.ini file!")
+            _print("Error! No Treasure Map keys (`TM_API_TOKEN`, `TM_ENDPOINT`) in the Settings.ini file!")
             is_error = True
 
         if not any(tm_api_token) or not any(tm_base_url):
-            print("Can't load TM detectors with API keys or API endpoints!")
+            _print("Can't load TM detectors with API keys or API endpoints!")
             is_error = True
 
         if tm_detector_id is None:
-            print("Error! You must provide a correct TM Detector Id!")
+            _print("Error! You must provide a correct TM Detector Id!")
             is_error = True
 
         if is_error:
-            print("Exiting...")
+            _print("Exiting...")
             return 1
 
         instrument_url = 'instruments'
@@ -2831,7 +2856,7 @@ class Teglon:
 
         instrument_dict = None
         if not any(instrument_list):
-            print("TM ID `%s` did not return any results. Exiting..." % tm_detector_id)
+            _print("TM ID `%s` did not return any results. Exiting..." % tm_detector_id)
             return 1
         else:
             instrument_dict = instrument_list[0]
@@ -2849,10 +2874,10 @@ class Teglon:
                 '''
         existing_detector_result = query_db([detector_select % (instrument_full_name, instrument_nickname)])[0]
         if any(existing_detector_result):
-            print("\n*****\nDetector: `%s` is already in the database! Exiting...\n****" % instrument_full_name)
+            _print("\n*****\nDetector: `%s` is already in the database! Exiting...\n****" % instrument_full_name)
             return 1
 
-        print("\n*****\nDetector: `%s` is new to Teglon. Adding...\n****" % instrument_full_name)
+        _print("\n*****\nDetector: `%s` is new to Teglon. Adding...\n****" % instrument_full_name)
 
         footprint_url = 'footprints'
         instrument_detail_request = {
@@ -2899,7 +2924,7 @@ class Teglon:
                 tm_detector.name, tm_detector.query_polygon_string, tm_detector.area, tm_detector_id, min_dec, max_dec)
             query_db([q], commit=True)
 
-        print("Detector `%s` added!" % tm_detector.name)
+        _print("Detector `%s` added!" % tm_detector.name)
 
     def add_band(self, band_name, lambda_eff, f99_coef):
 
@@ -2909,8 +2934,8 @@ class Teglon:
         '''
         band_exists = query_db([select_band % band_name])[0]
         if len(band_exists) > 0 and band_exists[0][0] >= 1:
-            print("\n *********** Duplicated Band in DB! `%s`*********** " % band_name)
-            print("Exiting...")
+            _print("\n *********** Duplicated Band in DB! `%s`*********** " % band_name)
+            _print("Exiting...")
             return 1
 
         band_data = [
@@ -2918,12 +2943,12 @@ class Teglon:
         ]
         band_insert = "INSERT INTO Band (Name, Effective_Wavelength, F99_Coefficient) VALUES (%s, %s, %s);"
 
-        print("\nInserting %s bands..." % len(band_data))
+        _print("\nInserting %s bands..." % len(band_data))
         if insert_records(band_insert, band_data):
-            print("Success!")
+            _print("Success!")
         else:
             raise ("Error with INSERT! Exiting...")
-        print("...Done")
+        _print("...Done")
 
     def generate_static_grid_inserts(self, teglon_detector_id, detector_prefix, ebv_dict, skypixel_dict):
 
@@ -2944,7 +2969,7 @@ class Teglon:
 
         tiles = []
 
-        print("Building `%s` coordinate grid ..." % detector_name)
+        _print("Building `%s` coordinate grid ..." % detector_name)
         # detector_result = query_db([select_detect % detector_name])[0][0]
         detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_result[1])
         detector_id = int(detector_result[4])
@@ -2957,11 +2982,11 @@ class Teglon:
         t1 = time.time()
         allsky_detector_coords = Cartographer.generate_all_sky_coords(detector)
         t2 = time.time()
-        print("\n********* start DEBUG ***********")
-        print("`%s` Coordinate grid creation - execution time: %s" % (detector_name, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
+        _print("\n********* start DEBUG ***********")
+        _print("`%s` Coordinate grid creation - execution time: %s" % (detector_name, (t2 - t1)))
+        _print("********* end DEBUG ***********\n")
 
-        print("Building `%s` tiles ..." % detector_name)
+        _print("Building `%s` tiles ..." % detector_name)
         t1 = time.time()
         for i, c in enumerate(allsky_detector_coords):
             # only include pointings that the telescope can reach
@@ -2980,11 +3005,11 @@ class Teglon:
                 tiles.append(t)
 
         t2 = time.time()
-        print("\n********* start DEBUG ***********")
-        print("`%s` tile creation - execution time: %s" % (detector_name, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
+        _print("\n********* start DEBUG ***********")
+        _print("`%s` tile creation - execution time: %s" % (detector_name, (t2 - t1)))
+        _print("********* end DEBUG ***********\n")
 
-        print("Building INSERTS for all static tiles ...")
+        _print("Building INSERTS for all static tiles ...")
         static_tile_data = []
         for t in tiles:
             static_tile_data.append((t.detector.id,
@@ -2998,16 +3023,16 @@ class Teglon:
                                      t.id) # HACK: DC - this is overloaded... the `id` is for the Tile id, but the N128_Pixel_id is put here for convenience
                                     )
 
-        print("INSERTing all static tiles ...")
+        _print("INSERTing all static tiles ...")
         batch_insert(insert_static_tile, static_tile_data)
 
     def add_static_grid(self, teglon_detector_id, detector_prefix):
 
-        utilities_base_dir = "/app/web/src/utilities"
+        utilities_base_dir = _UTILITIES_DIR
         pickle_output_dir = "%s/pickles/" % utilities_base_dir
 
         ebv = None
-        print("\tLoading EBV...")
+        _print("\tLoading EBV...")
         if os.path.exists(pickle_output_dir + 'ebv.pkl'):
             with open(pickle_output_dir + 'ebv.pkl', 'rb') as handle:
                 ebv = pickle.load(handle)
@@ -3015,18 +3040,18 @@ class Teglon:
             raise Exception("EBV pickle does exist! Exiting...")
 
         sky_pixels = None
-        print("\tLoading existing pixels...")
+        _print("\tLoading existing pixels...")
         if os.path.exists(pickle_output_dir + "sky_pixels.pkl"):
             with open(pickle_output_dir + "sky_pixels.pkl", 'rb') as handle:
                 sky_pixels = pickle.load(handle)
 
-        print("Building Static Grids...")
+        _print("Building Static Grids...")
 
         t1 = time.time()
         self.generate_static_grid_inserts(teglon_detector_id=teglon_detector_id, detector_prefix=detector_prefix,
                                           ebv_dict=ebv, skypixel_dict=sky_pixels)
         t2 = time.time()
 
-        print("\n********* start DEBUG ***********")
-        print("Static Tile Creation - execution time: %s" % (t2 - t1))
-        print("********* end DEBUG ***********\n")
+        _print("\n********* start DEBUG ***********")
+        _print("Static Tile Creation - execution time: %s" % (t2 - t1))
+        _print("********* end DEBUG ***********\n")

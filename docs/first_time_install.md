@@ -96,6 +96,9 @@ E(B-V), galaxy↔pixel associations, completeness, static tile grids) **→ pick
 caches**. It needs a valid `TM_API_TOKEN` for the Treasure Map detector step.
 
 > Run `./teglon setup` (without `--run`) first to print the plan without executing.
+> Re-running `setup --run` is **safe** — stages whose tables/pickles already exist
+> are skipped (use `--force` to rebuild them), so a re-run after an interruption
+> won't duplicate rows.
 
 > **Old way (v1.0):** the same build, by hand, was three commands run via the
 > `gw_script` service — `bulk_upload_glade.py`, then `initialize_teglon.py` (with

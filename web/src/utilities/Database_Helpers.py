@@ -1,4 +1,5 @@
 import os
+import logging
 import mysql.connector
 from mysql.connector import Error
 import MySQLdb as my
@@ -6,6 +7,16 @@ import MySQLdb as my
 from configparser import RawConfigParser
 import time
 import sys
+
+# The per-query progress chatter ("Executing 1/1", "fetching results", ...) is the
+# main source of stdout flooding; route it to DEBUG so it is hidden by default and
+# shown with --verbose. Message text is unchanged.
+logger = logging.getLogger("teglon")
+
+
+def _dbg(*args, **kwargs):
+    """print-compatible shim -> logging.debug (joins args with spaces like print)."""
+    logger.debug(" ".join(str(a) for a in args))
 
 # Resolve the Settings.ini path: honor TEGLON_SETTINGS if set, otherwise look for a
 # `Settings.ini` next to the repo root (../../../ from this file) and fall back to CWD.
@@ -49,11 +60,11 @@ def bulk_upload(query):
         success = True
 
     except Error as e:
-        print("Error in uploading CSV!")
-        print(e)
+        logger.error("Error in uploading CSV!")
+        logger.error("%s" % e)
     except Exception as e:
-        print("Error in uploading CSV!")
-        print(e)
+        logger.error("Error in uploading CSV!")
+        logger.error("%s" % e)
         test = 1
     finally:
         cursor.close()
@@ -72,21 +83,21 @@ def query_db(query_list, commit=False):
         query_count = len(query_list)
         for qi, q in enumerate(query_list):
             current_q = qi + 1
-            print("Executing %s/%s" % (current_q, query_count))
+            _dbg("Executing %s/%s" % (current_q, query_count))
             cursor.execute(q)
 
             if commit:  # used for updates, etc
                 db.commit()
 
             streamed_results = []
-            print("\tfetching results...")
+            _dbg("\tfetching results...")
             while True:
                 r = cursor.fetchmany(1000000)
                 count = len(r)
                 streamed_results += r
                 size_in_mb = sys.getsizeof(streamed_results) / 1.0e+6
 
-                print("\t\tfetched: %s; current length: %s; running size: %0.3f MB" % (
+                _dbg("\t\tfetched: %s; current length: %s; running size: %0.3f MB" % (
                 count, len(streamed_results), size_in_mb))
 
                 if not r or count < chunk_size:
@@ -96,12 +107,12 @@ def query_db(query_list, commit=False):
 
     # except Error as e:
     except Exception as e:
-        print('Exception:', e)
+        logger.error("Exception: %s" % e)
     finally:
         cursor.close()
         db.close()
 
-    print("Returning total results: %s" % len(results))
+    _dbg("Returning total results: %s" % len(results))
     return results
 
 def batch_query(query_list):
@@ -111,9 +122,9 @@ def batch_query(query_list):
     jj = batch_size
     kk = len(query_list)
 
-    print("\nLength of data to query: %s" % kk)
-    print("Query batch size: %s" % batch_size)
-    print("Starting loop...")
+    _dbg("\nLength of data to query: %s" % kk)
+    _dbg("Query batch size: %s" % batch_size)
+    _dbg("Starting loop...")
 
     number_of_queries = len(query_list) // batch_size
     if len(query_list) % batch_size > 0:
@@ -124,7 +135,7 @@ def batch_query(query_list):
     while jj < kk:
         t1 = time.time()
 
-        print("%s:%s" % (ii, jj))
+        _dbg("%s:%s" % (ii, jj))
         payload = query_list[ii:jj]
         return_data += query_db(payload)
 
@@ -132,26 +143,26 @@ def batch_query(query_list):
         jj += batch_size
         t2 = time.time()
 
-        print("\n********* start DEBUG ***********")
-        print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
+        _dbg("\n********* start DEBUG ***********")
+        _dbg("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
+        _dbg("********* end DEBUG ***********\n")
 
         query_num += 1
 
-    print("Out of loop...")
+    _dbg("Out of loop...")
 
     t1 = time.time()
 
-    print("\n%s:%s" % (ii, kk))
+    _dbg("\n%s:%s" % (ii, kk))
 
     payload = query_list[ii:kk]
     return_data += query_db(payload)
 
     t2 = time.time()
 
-    print("\n********* start DEBUG ***********")
-    print("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
+    _dbg("\n********* start DEBUG ***********")
+    _dbg("Query %s/%s complete - execution time: %s" % (query_num, number_of_queries, (t2 - t1)))
+    _dbg("********* end DEBUG ***********\n")
 
     return return_data
 
@@ -167,15 +178,15 @@ def insert_records(query, data):
         conn.commit()
         success = True
     except Error as e:
-        print('Error:', e)
+        logger.error("Error: %s" % e)
     finally:
         cursor.close()
         conn.close()
 
     _tend = time.time()
-    print("\n********* start DEBUG ***********")
-    print("insert_records execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
+    _dbg("\n********* start DEBUG ***********")
+    _dbg("insert_records execution time: %s" % (_tend - _tstart))
+    _dbg("********* end DEBUG ***********\n")
     return success
 
 def batch_insert(insert_statement, insert_data, batch_size=50000):
@@ -185,9 +196,9 @@ def batch_insert(insert_statement, insert_data, batch_size=50000):
     j = batch_size
     k = len(insert_data)
 
-    print("\nLength of data to insert: %s" % len(insert_data))
-    print("Insert batch size: %s" % batch_size)
-    print("Starting loop...")
+    _dbg("\nLength of data to insert: %s" % len(insert_data))
+    _dbg("Insert batch size: %s" % batch_size)
+    _dbg("Starting loop...")
 
     number_of_inserts = len(insert_data) // batch_size
     if len(insert_data) % batch_size > 0:
@@ -198,7 +209,7 @@ def batch_insert(insert_statement, insert_data, batch_size=50000):
     while j < k:
         t1 = time.time()
 
-        print("%s:%s" % (i, j))
+        _dbg("%s:%s" % (i, j))
         payload = insert_data[i:j]
 
         if insert_records(insert_statement, payload):
@@ -209,17 +220,17 @@ def batch_insert(insert_statement, insert_data, batch_size=50000):
 
         t2 = time.time()
 
-        print("\n********* start DEBUG ***********")
-        print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
+        _dbg("\n********* start DEBUG ***********")
+        _dbg("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
+        _dbg("********* end DEBUG ***********\n")
 
         insert_num += 1
 
-    print("Out of loop...")
+    _dbg("Out of loop...")
 
     t1 = time.time()
 
-    print("\n%s:%s" % (i, k))
+    _dbg("\n%s:%s" % (i, k))
 
     payload = insert_data[i:k]
     if not insert_records(insert_statement, payload):
@@ -227,15 +238,15 @@ def batch_insert(insert_statement, insert_data, batch_size=50000):
 
     t2 = time.time()
 
-    print("\n********* start DEBUG ***********")
-    print("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
+    _dbg("\n********* start DEBUG ***********")
+    _dbg("INSERT %s/%s complete - execution time: %s" % (insert_num, number_of_inserts, (t2 - t1)))
+    _dbg("********* end DEBUG ***********\n")
 
     _tend = time.time()
 
-    print("\n********* start DEBUG ***********")
-    print("batch_insert execution time: %s" % (_tend - _tstart))
-    print("********* end DEBUG ***********\n")
+    _dbg("\n********* start DEBUG ***********")
+    _dbg("batch_insert execution time: %s" % (_tend - _tstart))
+    _dbg("********* end DEBUG ***********\n")
 
 def delete_rows(delete_query, id_tuples_to_delete):
     # Start with
@@ -244,9 +255,9 @@ def delete_rows(delete_query, id_tuples_to_delete):
     j = batch_size
     k = len(id_tuples_to_delete)
 
-    print("\nLength of records to DELETE: %s" % k)
-    print("DELETE batch size: %s" % j)
-    print("Starting loop...")
+    _dbg("\nLength of records to DELETE: %s" % k)
+    _dbg("DELETE batch size: %s" % j)
+    _dbg("Starting loop...")
 
     number_of_deletes = k // batch_size
     if k % batch_size > 0:
@@ -255,7 +266,7 @@ def delete_rows(delete_query, id_tuples_to_delete):
     delete_num = 1
     while j < k:
         t1 = time.time()
-        print("%s:%s" % (i, j))
+        _dbg("%s:%s" % (i, j))
 
         id_string = ",".join([str(id_tup[0]) for id_tup in id_tuples_to_delete[i:j]])
         query_db([delete_query % id_string], commit=True)
@@ -264,20 +275,20 @@ def delete_rows(delete_query, id_tuples_to_delete):
 
         t2 = time.time()
 
-        print("\n********* start DEBUG ***********")
-        print("DELETE %s/%s complete - execution time: %s" % (delete_num, number_of_deletes, (t2 - t1)))
-        print("********* end DEBUG ***********\n")
+        _dbg("\n********* start DEBUG ***********")
+        _dbg("DELETE %s/%s complete - execution time: %s" % (delete_num, number_of_deletes, (t2 - t1)))
+        _dbg("********* end DEBUG ***********\n")
 
         delete_num += 1
 
     t1 = time.time()
-    print("%s:%s" % (i, k))
+    _dbg("%s:%s" % (i, k))
 
     id_string = ",".join([str(id_tup[0]) for id_tup in id_tuples_to_delete[i:k]])
     query_db([delete_query % id_string], commit=True)
 
     t2 = time.time()
 
-    print("\n********* start DEBUG ***********")
-    print("DELETE %s/%s complete - execution time: %s" % (delete_num, number_of_deletes, (t2 - t1)))
-    print("********* end DEBUG ***********\n")
+    _dbg("\n********* start DEBUG ***********")
+    _dbg("DELETE %s/%s complete - execution time: %s" % (delete_num, number_of_deletes, (t2 - t1)))
+    _dbg("********* end DEBUG ***********\n")

@@ -13,6 +13,8 @@ Usage:
         --healpix_file bayestar.fits.gz
 """
 import argparse
+import json
+import sys
 import os
 
 import numpy as np
@@ -94,7 +96,7 @@ def load_event_maps(gw_id, healpix_file, event_dir):
         map_2d = hp.read_map(orig_fits, field=0)
         nside_2d = hp.npix2nside(len(map_2d))
     else:
-        print("Original FITS not found at %s; using the rescaled DB map for 2D." % orig_fits)
+        print("Original FITS not found at %s; using the rescaled DB map for 2D." % orig_fits, file=sys.stderr)
         map_2d = map_2d_db
         nside_2d = nside
 
@@ -108,6 +110,7 @@ def main():
     parser.add_argument("--healpix_file", default="bayestar.fits.gz")
     parser.add_argument("--healpix_dir", default="./web/events/{GWID}")
     parser.add_argument("--out", default=None, help="Output PDF path (default in the event dir).")
+    parser.add_argument("--json", action="store_true", help="Emit the area metrics as JSON.")
     args = parser.parse_args()
 
     event_dir = args.healpix_dir.replace("{GWID}", args.gw_id)
@@ -135,25 +138,39 @@ def main():
 
     t = Time(t_0, format="gps", scale="utc")
 
-    # --- metadata block (machine-parseable for the report) ---
-    print("TEGLON_COMPARE_BEGIN")
-    print("gw_id=%s" % args.gw_id)
-    print("healpix_file=%s" % args.healpix_file)
-    print("map_id=%d" % map_id)
-    print("nside_2d=%d" % nside_2d)
-    print("nside_4d=%d" % nside_4d)
-    print("t_0_gps=%.3f" % t_0)
-    print("t_0_iso=%s" % t.to_value("iso"))
-    print("net_prob_to_galaxies=%.6f" % net_prob)
-    print("area_2d_90_sqdeg=%.2f" % a2_90)
-    print("area_2d_50_sqdeg=%.2f" % a2_50)
-    print("area_4d_90_sqdeg=%.2f" % a4_90)
-    print("area_4d_50_sqdeg=%.2f" % a4_50)
-    print("area_90_change_pct=%.2f" % pct(a2_90, a4_90))
-    print("area_50_change_pct=%.2f" % pct(a2_50, a4_50))
-    if a4_90 > 0:
-        print("area_90_shrink_factor=%.2f" % (a2_90 / a4_90))
-    print("TEGLON_COMPARE_END")
+    # --- metadata block (machine-parseable; KEY=value, or JSON with --json) ---
+    shrink = (a2_90 / a4_90) if a4_90 > 0 else None
+    if args.json:
+        print(json.dumps({
+            "gw_id": args.gw_id, "healpix_file": args.healpix_file, "map_id": map_id,
+            "nside_2d": nside_2d, "nside_4d": nside_4d,
+            "t_0_gps": round(t_0, 3), "t_0_iso": t.to_value("iso"),
+            "net_prob_to_galaxies": round(net_prob, 6),
+            "area_2d_90_sqdeg": round(a2_90, 2), "area_2d_50_sqdeg": round(a2_50, 2),
+            "area_4d_90_sqdeg": round(a4_90, 2), "area_4d_50_sqdeg": round(a4_50, 2),
+            "area_90_change_pct": round(pct(a2_90, a4_90), 2),
+            "area_50_change_pct": round(pct(a2_50, a4_50), 2),
+            "area_90_shrink_factor": round(shrink, 2) if shrink is not None else None,
+        }))
+    else:
+        print("TEGLON_COMPARE_BEGIN")
+        print("gw_id=%s" % args.gw_id)
+        print("healpix_file=%s" % args.healpix_file)
+        print("map_id=%d" % map_id)
+        print("nside_2d=%d" % nside_2d)
+        print("nside_4d=%d" % nside_4d)
+        print("t_0_gps=%.3f" % t_0)
+        print("t_0_iso=%s" % t.to_value("iso"))
+        print("net_prob_to_galaxies=%.6f" % net_prob)
+        print("area_2d_90_sqdeg=%.2f" % a2_90)
+        print("area_2d_50_sqdeg=%.2f" % a2_50)
+        print("area_4d_90_sqdeg=%.2f" % a4_90)
+        print("area_4d_50_sqdeg=%.2f" % a4_50)
+        print("area_90_change_pct=%.2f" % pct(a2_90, a4_90))
+        print("area_50_change_pct=%.2f" % pct(a2_50, a4_50))
+        if shrink is not None:
+            print("area_90_shrink_factor=%.2f" % shrink)
+        print("TEGLON_COMPARE_END")
 
     # --- side-by-side figure ---
     levels_2d = find_greedy_credible_levels(map_2d)
@@ -174,7 +191,7 @@ def main():
             ax.contourf_hpx(lv, levels=[0.0, 0.5, 0.9], cmap="OrRd_r", alpha=0.8)
             ax.contour_hpx(lv, levels=[0.5, 0.9], colors="k", linewidths=0.3)
         except Exception as e:
-            print("Plot warning for one panel: %s" % e)
+            print("Plot warning for one panel: %s" % e, file=sys.stderr)
 
     fig.suptitle("%s  -  galaxy reweighting concentrates the localization "
                  "(90%% credible region: %s $\\rightarrow$ %s deg$^2$, %.1fx smaller)"
@@ -183,7 +200,7 @@ def main():
     plt.tight_layout()
     fig.savefig(out_pdf, bbox_inches="tight", format="pdf")
     plt.close("all")
-    print("Saved comparison PDF: %s" % out_pdf)
+    print("Saved comparison PDF: %s" % out_pdf, file=sys.stderr)
 
 
 if __name__ == "__main__":
