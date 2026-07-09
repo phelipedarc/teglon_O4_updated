@@ -25,16 +25,13 @@ class TestEventHelpers(unittest.TestCase):
 
     def test_build_delete_map_sql_structure(self):
         stmts = tc.build_delete_map_sql(7)
-        self.assertEqual(len(stmts), 4)
-        self.assertEqual(stmts[0], "CALL BackupTables(7);")
-        self.assertIn("LOCK TABLE HealpixMap WRITE", stmts[1])
-        self.assertEqual(stmts[2], "CALL DeleteMap(7);")
-        self.assertEqual(stmts[3], "UNLOCK TABLES;")
+        self.assertEqual(len(stmts), 1)
+        self.assertEqual(stmts[0], "CALL DeleteMap(7);")
 
     def test_build_delete_map_sql_coerces_int(self):
         # A string id must be coerced to int (guards against SQL injection of ids).
         stmts = tc.build_delete_map_sql("42")
-        self.assertEqual(stmts[2], "CALL DeleteMap(42);")
+        self.assertEqual(stmts[0], "CALL DeleteMap(42);")
         with self.assertRaises(ValueError):
             tc.build_delete_map_sql("42; DROP TABLE HealpixMap;")
 

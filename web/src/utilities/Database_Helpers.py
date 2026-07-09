@@ -72,9 +72,11 @@ def bulk_upload(query):
 
     return success
 
-def query_db(query_list, commit=False):
+def query_db(query_list, commit=False, raise_on_error=False):
 
     results = []
+    db = None
+    cursor = None
     try:
         chunk_size = 1e+6
         db = my.connect(host=db_host, user=db_user, passwd=db_pwd, db=db_name, port=db_port)
@@ -108,9 +110,17 @@ def query_db(query_list, commit=False):
     # except Error as e:
     except Exception as e:
         logger.error("Exception: %s" % e)
+        # Previously swallowed unconditionally, which let a failed statement
+        # (e.g. a failed clobber/delete) proceed as if it had succeeded. Callers
+        # that must abort on failure pass raise_on_error=True; the default keeps
+        # the historical behavior for every other caller.
+        if raise_on_error:
+            raise
     finally:
-        cursor.close()
-        db.close()
+        if cursor is not None:
+            cursor.close()
+        if db is not None:
+            db.close()
 
     _dbg("Returning total results: %s" % len(results))
     return results

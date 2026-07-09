@@ -1264,25 +1264,20 @@ class Teglon:
             if clobber:
                 _print(
                     "\n************ The combination of GWID `%s` and healpix file `%s` already exists in the db.************ \nClobbering...")
-                # Delete the map in the db...
-
-                create_baks = 'CALL BackupTables(%s);' % current_map_id
-                lock_tables = '''
-                            LOCK TABLE HealpixMap WRITE, HealpixPixel WRITE, HealpixPixel_Completeness WRITE, HealpixPixel_Galaxy_Weight WRITE, 
-                            ObservedTile WRITE, ObservedTile_HealpixPixel WRITE, StaticTile_HealpixPixel WRITE, HealpixMap_bak WRITE, HealpixPixel_bak WRITE, 
-                            HealpixPixel_Completeness_bak WRITE, HealpixPixel_Galaxy_Weight_bak WRITE, ObservedTile_bak WRITE, ObservedTile_HealpixPixel_bak WRITE, 
-                            StaticTile_HealpixPixel_bak WRITE;
-                        '''
+                # DeleteMap performs a targeted, transactional delete of ONLY this
+                # map's rows (docker/db_init/delete_map.sql); the old BackupTables /
+                # LOCK / restore dance is no longer needed. raise_on_error so a
+                # failed delete aborts the load instead of continuing over a
+                # rolled-back map.
                 delete_map = 'CALL DeleteMap(%s);' % current_map_id
-                unlock_tables = 'UNLOCK TABLES;'
-
-                query_db([create_baks], commit=True)
-                query_db([lock_tables], commit=True)
-                query_db([delete_map], commit=True)
-                query_db([unlock_tables], commit=True)
-
-                _print(
-                    "\n************ Map ID `%s` has been deleted, proceeding with load_map...************\n" % current_map_id)
+                try:
+                    query_db([delete_map], commit=True, raise_on_error=True)
+                    _print(
+                        "\n************ Map ID `%s` has been deleted, proceeding with load_map...************\n" % current_map_id)
+                except Exception as e:
+                    _print(
+                        "\n************ ERROR: failed to delete existing Map ID `%s`: %s. Aborting.************\n" % (current_map_id, e))
+                    is_error = True
 
             else:
                 is_error = True

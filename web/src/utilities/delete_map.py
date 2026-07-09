@@ -19,20 +19,13 @@ class Teglon:
             is_error = True
             print("HealpixMap_id is required.")
 
-        create_baks = 'CALL BackupTables(%s);' % self.options.healpix_map_id
-        lock_tables = '''
-            LOCK TABLE HealpixMap WRITE, HealpixPixel WRITE, HealpixPixel_Completeness WRITE, HealpixPixel_Galaxy_Weight WRITE, 
-            ObservedTile WRITE, ObservedTile_HealpixPixel WRITE, StaticTile_HealpixPixel WRITE, HealpixMap_bak WRITE, HealpixPixel_bak WRITE, 
-            HealpixPixel_Completeness_bak WRITE, HealpixPixel_Galaxy_Weight_bak WRITE, ObservedTile_bak WRITE, ObservedTile_HealpixPixel_bak WRITE, 
-            StaticTile_HealpixPixel_bak WRITE;
-        '''
-        delete_map = 'CALL DeleteMap(%s);' % self.options.healpix_map_id
-        unlock_tables = 'UNLOCK TABLES;'
+        if is_error:
+            return
 
-        query_db([create_baks], commit=True)
-        query_db([lock_tables], commit=True)
-        query_db([delete_map], commit=True)
-        query_db([unlock_tables], commit=True)
+        # DeleteMap performs a targeted, transactional delete of ONLY this map's
+        # rows (docker/db_init/delete_map.sql). raise_on_error surfaces failures.
+        delete_map = 'CALL DeleteMap(%s);' % self.options.healpix_map_id
+        query_db([delete_map], commit=True, raise_on_error=True)
 
 
 if __name__ == "__main__":

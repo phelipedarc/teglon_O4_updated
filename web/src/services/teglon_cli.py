@@ -110,22 +110,14 @@ def event_dir(gw_id, healpix_dir="./web/events/{GWID}"):
 
 
 def build_delete_map_sql(map_id):
-    """Return the ordered SQL statements that remove a single HealpixMap by id.
+    """Return the SQL statement(s) that remove a single HealpixMap by id.
 
-    Mirrors web/src/utilities/delete_map.py exactly (BackupTables -> lock ->
-    DeleteMap -> unlock). Pure: builds strings only, runs nothing."""
+    DeleteMap performs a targeted, transactional delete of only this map's rows
+    (docker/db_init/delete_map.sql); the old BackupTables/LOCK/restore dance is no
+    longer needed. Pure: builds the string only, runs nothing. map_id is coerced to
+    int, which also guards against SQL injection via the id."""
     map_id = int(map_id)
-    create_baks = "CALL BackupTables(%d);" % map_id
-    lock_tables = (
-        "LOCK TABLE HealpixMap WRITE, HealpixPixel WRITE, HealpixPixel_Completeness WRITE, "
-        "HealpixPixel_Galaxy_Weight WRITE, ObservedTile WRITE, ObservedTile_HealpixPixel WRITE, "
-        "StaticTile_HealpixPixel WRITE, HealpixMap_bak WRITE, HealpixPixel_bak WRITE, "
-        "HealpixPixel_Completeness_bak WRITE, HealpixPixel_Galaxy_Weight_bak WRITE, "
-        "ObservedTile_bak WRITE, ObservedTile_HealpixPixel_bak WRITE, StaticTile_HealpixPixel_bak WRITE;"
-    )
-    delete_map = "CALL DeleteMap(%d);" % map_id
-    unlock_tables = "UNLOCK TABLES;"
-    return [create_baks, lock_tables, delete_map, unlock_tables]
+    return ["CALL DeleteMap(%d);" % map_id]
 
 
 def plan_event_file_deletion(directory):
@@ -600,8 +592,12 @@ def cmd_delete_event(args):
     if not args.files_only:
         for mid, fn in map_ids:
             logger.info("Deleting HealpixMap id=%d ..." % mid)
-            for q in build_delete_map_sql(mid):
-                query_db([q], commit=True)
+            try:
+                for q in build_delete_map_sql(mid):
+                    query_db([q], commit=True, raise_on_error=True)
+            except Exception as e:
+                logger.error("Failed to delete HealpixMap id=%d: %s" % (mid, e))
+                return 1
     if not args.db_only and os.path.isdir(directory):
         import shutil
         logger.info("Removing directory %s ..." % directory)
