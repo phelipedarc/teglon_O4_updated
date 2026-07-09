@@ -1,0 +1,11 @@
+# Redback Transients Extension — dependencies for an ISOLATED simulation venv.
+#
+# DO NOT install these into the core teglon environment: redback pulls astropy 7.x,
+# which breaks teglon's pinned astropy==5.2.2 and ligo.skymap. Build a SEPARATE venv
+# for the two simulation scripts (simulate_redback_teglon.py, simulate_observed_tiles.py);
+# run the detection analysis in the stock teglon container via --from_disk (no redback
+# needed). See README.md ("Deploy" / two-environment split).
+#
+# sncosmo (a redback dependency) builds from source and needs a C compiler.
+# Written/tested against redback 1.17 — pin to your exact version for reproducibility.
+redback
