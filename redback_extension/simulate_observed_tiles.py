@@ -16,7 +16,7 @@ Band 'SDSS r' id=19.
 RUN INSIDE THE TEGLON CONTAINER (cwd /app, PYTHONPATH=/app). Because only the repo
 is bind-mounted at /app, drop this file somewhere under the repo (e.g. /app) and run:
 
-  cd /mnt/nvmeold1/teglon_install/teglon_O4_updated
+  cd /path/to/teglon_O4_updated
   docker compose -p teglon_install --env-file docker/.env -f docker/docker-compose.yml \
       run --rm --entrypoint python teglon_cli /app/simulate_observed_tiles.py \
       --n_tiles 60 --dry_run

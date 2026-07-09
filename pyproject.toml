@@ -50,8 +50,8 @@ legacy = [
 ]
 
 [project.urls]
-Documentation = "https://teglon-04.readthedocs.io/en/latest/"
-Repository = "https://github.com/davecoulter/teglon_O4"
+Documentation = "https://github.com/phelipedarc/teglon_O4_updated/tree/darcTeglon/docs"
+Repository = "https://github.com/phelipedarc/teglon_O4_updated"
 
 [project.scripts]
 teglon = "web.src.services.teglon_cli:main"

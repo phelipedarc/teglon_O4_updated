@@ -17,3 +17,4 @@ Settings.ini
 web/src/utilities/galaxy_catalog_files/*.dat
 
 .ipynb_checkpoints/
+.DS_Store
