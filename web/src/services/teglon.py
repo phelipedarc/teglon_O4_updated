@@ -215,9 +215,11 @@ class Teglon:
                 is_error = True
                 _print("Healpix file does not exist!")
 
-        if tele not in detector_mapping:
+        # `tele` may be a short flag (detector_mapping) or an exact detector Name;
+        # a non-flag name is validated against the DB at selection time below.
+        if tele == "":
             is_error = True
-            _print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+            _print("Telescope selection is required.")
 
         if band not in band_mapping:
             is_error = True
@@ -444,8 +446,17 @@ class Teglon:
 
         queries_to_execute = {}
         if extract_all:
-            # for key, detector_name in detector_mapping.items():
-            for detector_name, band_shortname in default_settings.items():
+            # DB/TM-driven: every detector with a static grid (Treasure-Map ones
+            # first) plus the galaxy-based NICKEL. default_settings supplies each
+            # detector's default band, falling back to the requested --band.
+            tileable_names_select = ("SELECT DISTINCT d.Name FROM Detector d "
+                                     "JOIN StaticTile st ON st.Detector_id = d.id "
+                                     "ORDER BY (d.TM_id IS NOT NULL) DESC, d.id;")
+            all_detector_names = [row[0] for row in query_db([tileable_names_select])[0]]
+            if "NICKEL" not in all_detector_names:
+                all_detector_names.append("NICKEL")
+            for detector_name in all_detector_names:
+                band_shortname = default_settings.get(detector_name, band)
 
                 detector_result = query_db([detector_select_by_name % detector_name])[0][0]
                 detector_id = int(detector_result[0])
@@ -478,8 +489,14 @@ class Teglon:
                                                                                                     w,
                                                                                                     num_tiles)
         else:
-            detector_name = detector_mapping[tele]
-            detector_result = query_db([detector_select_by_name % detector_name])[0][0]
+            # short flag -> Name; otherwise treat `tele` as an exact detector Name.
+            detector_name = detector_mapping.get(tele, tele)
+            detector_lookup = query_db([detector_select_by_name % detector_name])[0]
+            if len(detector_lookup) == 0:
+                _print("Invalid telescope selection `%s`. Use a short flag (%s) or an exact detector Name."
+                       % (tele, list(detector_mapping.keys())))
+                return 1
+            detector_result = detector_lookup[0]
             detector_id = int(detector_result[0])
             detector_min_dec = float(detector_result[6])
             detector_max_dec = float(detector_result[7])
