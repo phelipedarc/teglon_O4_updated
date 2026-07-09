@@ -2228,6 +2228,12 @@ class Teglon:
                     pix_mean_dist = float(p[7])
                     N128_id = int(p[10])
 
+                    # NOTE: the completeness curve C_k(D) can be non-monotonic in
+                    # distance (distance-dependent NSIDE; see initialize_teglon.py
+                    # distance_at_resolution_change and docs/user_guide_v2.md "Known
+                    # limitations & scientific caveats"). np.interp only requires the
+                    # distance (x) array to be ascending -- it is; the completeness (y)
+                    # values are used as-is and are deliberately NOT monotonised here.
                     pix_completeness = np.interp(pix_mean_dist,
                                                  completeness_values_dict[N128_id][0],
                                                  completeness_values_dict[N128_id][1])

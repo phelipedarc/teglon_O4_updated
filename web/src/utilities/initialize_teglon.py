@@ -245,6 +245,16 @@ class Teglon:
         nsides = [nside2, nside4, nside8, nside16, nside32, nside64, nside128]
         frac = [frac_sky_nside2, frac_sky_nside4, frac_sky_nside8, frac_sky_nside16, frac_sky_nside32, frac_sky_nside64, frac_sky_nside128]
 
+        # KNOWN LIMITATION (completeness resolution) -- documented caveat, not a bug.
+        # This schedule is paired index-for-index with `nsides` above, so galaxy
+        # completeness is measured at a COARSE HEALPix resolution near the observer
+        # (NSIDE 2, ~860 deg^2/pixel below 45 Mpc) and a FINE one far away (NSIDE 128
+        # beyond 900 Mpc). Because each distance shell averages completeness over a
+        # different solid angle, the composed per-pixel completeness C_k(D) is NOT
+        # guaranteed monotonic in distance. Changing it (e.g. monotonising, or a single
+        # fixed NSIDE) is a MODELING decision that moves published 4D areas -- see
+        # docs/user_guide_v2.md "Known limitations & scientific caveats". Read site:
+        # teglon.py, np.interp over this completeness curve during the 2D->4D reweight.
         distance_at_resolution_change = [45,125,200,400,700,900,1220] # Mpc
         steps_in_resolution_bin = [6,24,19,37,38,13,8]
 

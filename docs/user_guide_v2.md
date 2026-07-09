@@ -264,3 +264,42 @@ fresh `git clone` of the fork: all `initialize_teglon` stages + pickles complete
 
 The v1.0 troubleshooting items (port 53306 in use, GLADE filename, GLADE
 intermediate permissions, stale pickles, missing model dirs, OOM) all still apply.
+
+## 9. Known limitations & scientific caveats
+
+These are intrinsic modeling/algorithm properties (not install bugs), documented so
+results can be interpreted — and cited — honestly.
+
+### 9.1 Per-pixel completeness is non-monotonic in distance
+Galaxy completeness is composed on a **distance-dependent HEALPix resolution**
+(`initialize_teglon.py`: `distance_at_resolution_change = [45,125,200,400,700,900,1220]`
+Mpc, paired index-for-index with NSIDE `[2,4,8,16,32,64,128]`) — coarse near the
+observer, fine far away. Because each distance shell averages completeness over a
+different solid angle, the per-pixel completeness curve `C_k(D)` used in the 2D→4D
+reweight (`renorm2dprob = prob·(1−C_k(D))`) is **not guaranteed monotonic in distance**
+— it can rise across a resolution boundary (e.g. a jump at the 45 Mpc NSIDE 2→4 edge).
+Consequently a single event's mean completeness and its 4D-area reduction need **not**
+fall monotonically with distance; the clean "benefit shrinks with distance" trend holds
+only on the sky-average. This is a deliberate trade-off (a fine pixel near the observer
+holds too few galaxies for a stable estimate). Changing it (monotonising the curve, or a
+single fixed NSIDE) is a **scientific decision that moves published 4D areas**, so it is
+left as-is and flagged here.
+
+### 9.2 Greedy tile ranking slightly double-counts overlapping-tile probability
+The static tile grid overlaps a little by construction, and the ranked cumulative
+`cum_prob = SUM(net_prob) OVER (ORDER BY net_prob DESC)` sums each tile's standalone
+probability, so a sky pixel shared by two tiles is counted twice — `cum_prob` is
+therefore not the true unique (set-cover) coverage. **Measured impact is small:** on the
+four O3/O4 events (T80-S grid, RescaledNSIDE 256) only ~0.3–0.6% of covered pixels fall
+in more than one tile, so `cum_prob` over-counts true unique coverage by **~0.5–0.6%**
+and the "tiles to reach 90%" is off by at most a couple of tiles (e.g. S190425z: 2267 vs
+2301). The metric is technically imprecise but numerically minor because the grid barely
+overlaps — treat reported `Percentile`/coverage as accurate to ~1%.
+
+### 9.3 `compare` measures 2D and 4D areas on different pixel grids
+`compare` intentionally reads the **2D** credible area from the original full-resolution
+FITS (so it matches the published localisation area) while the **4D** area is measured on
+the DB map at `RescaledNSIDE`. The two areas are on different grids, so the reported
+shrink *factor* mixes the physical galaxy-reweighting gain with a resolution term. This
+is by design (the 2D number is meant to equal the published area); use `skymap-info` for
+a single-grid cross-check.
