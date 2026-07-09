@@ -104,7 +104,7 @@ caches**. It needs a valid `TM_API_TOKEN` for the Treasure Map detector step.
 > `gw_script` service — `bulk_upload_glade.py`, then `initialize_teglon.py` (with
 > all `--build_*` flags), then `build_init_pickles.py`. `setup --run` simply chains
 > them. Full old↔new mapping is in the
-> [User Guide](user_guide_v2.md#3-old--new-command-equivalence) — both still work.
+> [User Guide](user_guide_v2.md#3-old-new-command-equivalence) — both still work.
 
 ## 7. Use it — run S240413p end to end
 

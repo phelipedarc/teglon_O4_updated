@@ -92,7 +92,7 @@ only modestly — the expected behavior.
 | Function | Time | Result |
 |----------|-----:|--------|
 | `add-telescope --tm-detector-id 47` | 3.7 s | Treasure Map fetch + dedup (all 80 detectors loaded by `setup`) |
-| `delete-event <GWID> --yes` | 1.9 s | removes the map (Backup/Delete proc) + event directory; other maps preserved |
+| `delete-event <GWID> --yes` | 1.9 s | removes the map (targeted `DeleteMap` proc) + event directory; other maps preserved |
 
 Not benchmarked (require campaign data): `load-obs` (executed pointings file),
 `efficiency` (observed tiles + model run). `run` = composite of `load-map`+`extract`+`plot`.

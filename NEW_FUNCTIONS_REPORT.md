@@ -15,7 +15,7 @@ logic or schema was changed.
 
 | # | Command | What it does | Reuses |
 |---|---------|--------------|--------|
-| 1 | `teglon delete-event <GWID>` | Clean a GW event from the DB **and** files | `BackupTables`/`DeleteMap` procs (same as `delete_map.py` / `load_map --clobber`) |
+| 1 | `teglon delete-event <GWID>` | Clean a GW event from the DB **and** files | `DeleteMap` proc — targeted transactional delete (same as `delete_map.py` / `load_map --clobber`) |
 | 2 | `teglon add-telescope --tm-detector-id <id>` | Register a new telescope (e.g. LSST/Vera Rubin) + optional static grid | `Teglon.add_detector`, `Teglon.add_static_grid` |
 | 3 | `teglon setup [--run]` | One-time complete install initialization | `bulk_upload_glade.py`, `initialize_teglon.py` (all flags), `build_init_pickles.py` |
 | 4 | `teglon trigger <GWID> --healpix-file <f>` | Ingest + galaxy-reweight a skymap, export the updated 4D HEALPix map to FITS | `Teglon.load_map`, plot_teglon's 4D reconstruction |

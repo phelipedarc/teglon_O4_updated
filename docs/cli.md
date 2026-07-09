@@ -46,7 +46,7 @@ Full pipeline for one event: **load-map → extract → plot**.
 | --- | --- | --- |
 | `--healpix-file` | `bayestar.fits.gz` | Map filename to download/use |
 | `--healpix-dir` | `./web/events/{GWID}` | Event working directory |
-| `--tele` | `a` | Telescope: `s`,`t`,`n`,`t80`,`nf`,`a`(ll) |
+| `--tele` | `a` | Telescope: `s`,`t`,`n`,`t80`,`nf`,`a`(ll), or an exact detector Name |
 | `--extinct` | `0.5` | Max extinction (mag) |
 | `--prob-type` | `4D` | `4D` (galaxy-weighted) or `2D` |
 | `--cum-prob` | `0.9` | Cumulative probability to cover (0.2–0.95) |
@@ -87,12 +87,21 @@ You can still pass `--t0 <gps>` explicitly (on `run`/`load-map`/`trigger`) to sk
 all lookups for a fully-offline ingest.
 
 ### `teglon extract <GWID>`
-Produce ranked tile lists from an already-ingested map. Adds a box filter:
-`--band`, `--min-ra`, `--max-ra`, `--min-dec`, `--max-dec` (all four required together).
+Produce ranked tile lists from an already-ingested map. Selection options `--tele`,
+`--band`, `--extinct`, `--prob-type`, `--cum-prob`, `--num-tiles` work as in `run`.
+`--tele` accepts a short flag (`s`,`t`,`n`,`t80`,`nf`,`a`) **or an exact detector Name**
+(e.g. a telescope you registered with `add-telescope`). An optional box filter restricts
+the region: `--min-ra`, `--max-ra`, `--min-dec`, `--max-dec` (all four required together).
 `--json` emits a per-telescope tile-file summary (filename + tile count) to stdout.
 
+### `teglon trigger <GWID>`
+Ingest + galaxy-reweight a skymap and export the updated 4D HEALPix map in one step —
+the common per-event entry point. Options: `--no-ingest` (skip load-map; export from an
+already-ingested event), `--no-clobber`, `--analysis-mode`, `--t0 <gps>` (event GPS time;
+use with a pre-placed local skymap to skip the GraceDB/GWOSC lookup).
+
 ### `teglon plot <GWID>`
-Render the plan. Options: `--tele`, `--band`, `--tile-file`, `--num-tiles`,
+Render the plan. Options: `--tele`, `--band`, `--extinct`, `--tile-file`, `--num-tiles`,
 `--cum-prob-outer`, `--cum-prob-inner`.
 
 ## `teglon compare <GWID>`
@@ -142,6 +151,37 @@ Options: `--model-type` (`kne`, `grb`, …), `--num-cpu`, `--clobber`, `--json`
 Build a fresh database (dust + GLADE + optional detectors/grids). See
 [Fresh DB bootstrap](bootstrap.md). Options: `--instruments-config FILE`,
 `--skip-dust`, `--skip-galaxies`.
+
+## Management commands
+
+### `teglon setup`
+One-time complete initialization: dust + GLADE upload → `initialize_teglon` → build
+pickles. **Dry-run unless `--run`** (otherwise prints the plan). Options: `--run`,
+`--force` (re-run stages even if their tables/pickles already exist), `--skip-glade`,
+`--skip-init`, `--skip-pickles`, `--no-debug`.
+
+### `teglon add-telescope`
+Register a new telescope/detector (e.g. LSST / Vera Rubin) from its Treasure Map id, and
+optionally build its static tile grid.
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--tm-detector-id` | *(required)* | Treasure Map instrument id |
+| `--geometry` | `polygon` | `rectangle`, `circle`, or `polygon` (use the TM footprint) |
+| `--width` / `--height` | — | FOV size (deg); rectangle only |
+| `--radius` | — | FOV radius (deg); circle only |
+| `--min-dec` / `--max-dec` | `-90` / `90` | Declination limits |
+| `--teglon-detector-id` | — | DB `Detector.id`; with `--prefix`, also build its static grid |
+| `--prefix` | — | Field-name prefix for the static grid (e.g. `L`) |
+
+Once a telescope is registered **and** gridded, `extract` tiles it automatically and it
+is selectable via `--tele <Name>`.
+
+### `teglon delete-event <GWID>`
+Clean a GW event from the DB and/or the filesystem. **Dry-run unless `--yes`.** Options:
+`--yes` (perform the deletion), `--db-only` (DB records only), `--files-only` (files
+only). The DB deletion removes only the target map's rows (a targeted transactional
+delete).
 
 ## Docker wrapper-only commands
 

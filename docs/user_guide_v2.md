@@ -107,8 +107,8 @@ Flag naming: the CLI uses kebab-case (`--healpix-file`, `--num-tiles`,
 ### 4.1 `teglon delete-event <GWID>` — clean a map from DB **and** files
 Dry-run by default (prints what it would remove); `--yes` executes. Operates by
 GW id (not the integer map id), and also removes the event directory. Internally
-uses the same `BackupTables`/`DeleteMap` procedures as v1.0's `delete_map.py`, so
-all other maps are preserved.
+uses the `DeleteMap` procedure — a targeted, transactional delete of only that map's
+rows — so all other maps are preserved.
 ```bash
 ./teglon delete-event S240413p              # dry-run
 ./teglon delete-event S240413p --yes        # execute (DB + files)
@@ -224,7 +224,7 @@ the official from-scratch `setup`**. If you follow the official path
 (`first_time_install.md`), you do **not** need these — they are documented so you
 know exactly what was and wasn't exercised:
 
-1. **Database cloned, not built.** Instead of `./teglon setup --run` (the ~2–3 h
+1. **Database cloned, not built.** Instead of `./teglon setup --run` (the ~45–63 min
    GLADE + `initialize_teglon` build), the production `teglon` schema was copied
    with a read-only `mysqldump` and restored into the test instance (minutes).
    *Official path:* run `./teglon setup --run`.
