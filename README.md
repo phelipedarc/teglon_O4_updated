@@ -3,7 +3,7 @@
 **Pixel-based gravitational-wave electromagnetic follow-up planner**, optimized for
 the LIGO/Virgo/KAGRA O4 run.
 
-[![Documentation Status](https://readthedocs.org/projects/teglon-04/badge/?version=latest)](https://teglon-04.readthedocs.io/en/latest/?badge=latest)
+📖 **[Documentation](docs/user_guide_v2.md)** · **[First-time install](docs/first_time_install.md)**
 
 Given a gravitational-wave sky-localization (a LIGO HEALPix probability map), Teglon
 re-weights the 2D sky probability by a galaxy catalog (GLADE) to produce a physically informed
@@ -47,7 +47,7 @@ Highlights of this version:
   the GWOSC event API for the GPS time (and a skymap, where the catalog publishes one).
 - **Physically-correct comparison** — original vs Teglon-updated maps are normalized over
   the same pixel set for an apples-to-apples credible-region comparison.
-- **Pip-installable** (`pyproject.toml`) and Docker, with a 24-test unit suite.
+- **Pip-installable** (`pyproject.toml`) and Docker, with a 34-test unit suite.
 
 ---
 
@@ -62,8 +62,14 @@ cp docker/.env.example docker/.env      # set VOL_APP, VOL_DB, VOL_DUSTMAPS, DB_
 cp Settings.example.ini Settings.ini    # set your Treasure Map API token
 
 ./teglon up                             # start the bundled MySQL database
-# first time only — build the database once (see Installation below):
-./teglon setup --run                    # GLADE + initialize + pickles (~45–63 min)
+
+# First-time DB build has two prerequisites BEFORE `setup --run` (see Installation):
+#   1. place the GLADE catalog at web/src/utilities/galaxy_catalog_files/GLADE_2.4.dat
+#      (download from http://glade.elte.hu/)
+#   2. fetch the dust maps:
+docker compose --env-file docker/.env -f docker/docker-compose.yml \
+  run --rm --no-deps --entrypoint python teglon_cli web/src/utilities/initialize_dust.py
+./teglon setup --run                    # then build the DB: GLADE + initialize + pickles (~45–63 min)
 
 ./teglon trigger S240413p               # GW ID → re-weighted skymap (~2–4 min)
 ./teglon extract S240413p               # ranked tiles per telescope

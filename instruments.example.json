@@ -1,22 +1,24 @@
 [
   {
+    "_comment": "TEMPLATE — replace the placeholder values with your instrument's real ones (see docs/bootstrap.md). tm_detector_id is the Treasure Map instrument id; teglon_detector_id is the Detector.id assigned after add_detector runs.",
     "name": "SWOPE",
-    "tm_detector_id": 0,
-    "teglon_detector_id": 0,
+    "tm_detector_id": 1,
+    "teglon_detector_id": 1,
     "detector_prefix": "S",
     "detector_geometry": "rectangle",
-    "detector_width": 0.0,
-    "detector_height": 0.0,
+    "detector_width": 0.47,
+    "detector_height": 0.47,
     "min_dec": -90.0,
     "max_dec": 90.0
   },
   {
+    "_comment": "Circle-geometry example — set detector_radius (deg) instead of width/height.",
     "name": "THACHER",
-    "tm_detector_id": 0,
-    "teglon_detector_id": 0,
+    "tm_detector_id": 2,
+    "teglon_detector_id": 2,
     "detector_prefix": "T",
     "detector_geometry": "circle",
-    "detector_radius": 0.0,
+    "detector_radius": 0.34,
     "min_dec": -90.0,
     "max_dec": 90.0
   }
