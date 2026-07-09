@@ -270,16 +270,29 @@ class Cartographer:
         dec_range = 179.99999
         ra_range = 359.99999
 
-        frac_dec_tile, num_dec_tiles = math.modf(dec_range / detector.deg_height)
+        # Rectangle detectors carry explicit deg_width/deg_height; polygon and
+        # circle detectors store NULL (None) for both. Fall back to the footprint's
+        # bounding-box extent so the all-sky grid can still be built (this routine
+        # tiles the sky rectangularly regardless of detector shape).
+        deg_width, deg_height = detector.deg_width, detector.deg_height
+        if deg_width is None or deg_height is None:
+            xmin = min(p.bounds[0] for p in detector.multipolygon)
+            ymin = min(p.bounds[1] for p in detector.multipolygon)
+            xmax = max(p.bounds[2] for p in detector.multipolygon)
+            ymax = max(p.bounds[3] for p in detector.multipolygon)
+            deg_width = deg_width if deg_width is not None else (xmax - xmin)
+            deg_height = deg_height if deg_height is not None else (ymax - ymin)
+
+        frac_dec_tile, num_dec_tiles = math.modf(dec_range / deg_height)
 
         total_dec_tiles = int(num_dec_tiles) + 1
         if num_dec_tiles == 0:
             num_dec_tiles = 1
 
-        dec_differential = (detector.deg_height - (frac_dec_tile * detector.deg_height)) / num_dec_tiles
+        dec_differential = (deg_height - (frac_dec_tile * deg_height)) / num_dec_tiles
 
-        dec_delta = detector.deg_height - dec_differential
-        starting_dec = southern_limit + detector.deg_height / 2.0
+        dec_delta = deg_height - dec_differential
+        starting_dec = southern_limit + deg_height / 2.0
 
         decs = []
         for i in range(total_dec_tiles):
@@ -289,7 +302,7 @@ class Cartographer:
         ras_over_decs = []
         for d in decs:
 
-            adjusted_tile_width = detector.deg_width / np.abs(np.cos(np.radians(d)))
+            adjusted_tile_width = deg_width / np.abs(np.cos(np.radians(d)))
 
             frac_ra_tile, num_ra_tiles = math.modf(ra_range / adjusted_tile_width)
             total_ra_tiles = int(num_ra_tiles) + 1
