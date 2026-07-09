@@ -1841,115 +1841,70 @@ class Teglon:
             tile_pixel_upload_csv = "%s/%s_tile_pixel_upload.csv" % (formatted_healpix_dir, gw_id)
 
             tile_pixel_data = []
-            if not skip_swope:
-                ##### DO SWOPE ######
-                # Get detector -> static tile rows
-                swope_detector_result = query_db([select_detector % "SWOPE"])[0][0]
-                swope_id = swope_detector_result[0]
-                swope_name = swope_detector_result[1]
-                swope_poly = swope_detector_result[2]
-                swope_detector_vertices = Detector.get_detector_vertices_from_teglon_db(swope_poly)
-                swope_detector = Detector(swope_name, swope_detector_vertices, detector_id=swope_id)
-                swope_static_tile_rows = query_db([tile_select % swope_id])[0]
 
-                swope_tiles = []
-                for r in swope_static_tile_rows:
-                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=swope_detector,
+            # Tileable detectors are resolved from the DB -- every detector that
+            # has a static grid, Treasure-Map-registered ones first -- instead of
+            # the old hard-coded SWOPE/THACHER/T80S/NEWFIRM blocks. Any detector
+            # gridded via add-static-grid (e.g. Roman/LSST) is therefore tiled
+            # automatically. The legacy skip_* flags still skip their detectors.
+            skipped_detector_names = set()
+            if skip_swope:
+                skipped_detector_names.add("SWOPE")
+            if skip_thacher:
+                skipped_detector_names.add("THACHER")
+            if skip_t80:
+                skipped_detector_names.add("T80S_T80S-Cam")
+            if skip_newfirm:
+                skipped_detector_names.add("NEWFIRM")
+
+            tileable_detector_select = ("SELECT DISTINCT d.id, d.Name, ST_AsText(d.Poly) "
+                                        "FROM Detector d JOIN StaticTile st ON st.Detector_id = d.id "
+                                        "ORDER BY (d.TM_id IS NOT NULL) DESC, d.id;")
+            tileable_detectors = query_db([tileable_detector_select])[0]
+
+            for detector_row in tileable_detectors:
+                det_id = detector_row[0]
+                det_name = detector_row[1]
+                det_poly = detector_row[2]
+
+                if det_name in skipped_detector_names:
+                    _print("**** Not registering %s tiles for this event! ****" % det_name)
+                    continue
+
+                _print("##### DO %s ######" % det_name)
+                detector_vertices = Detector.get_detector_vertices_from_teglon_db(det_poly)
+                detector = Detector(det_name, detector_vertices, detector_id=det_id)
+                static_tile_rows = query_db([tile_select % det_id])[0]
+
+                tiles = []
+                for r in static_tile_rows:
+                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=detector,
                              nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
-                    swope_tiles.append(t)
+                    tiles.append(t)
 
-                # clean up
-                _print("freeing `swope_static_tile_rows`...")
-                del swope_static_tile_rows
+                _print("freeing `static_tile_rows`...")
+                del static_tile_rows
 
                 t1 = time.time()
-                initialized_swope_tiles = None
-                # with mp.Pool() as pool:
                 with Pool() as pool:
-                    initialized_swope_tiles = pool.map(initialize_tile, swope_tiles)
+                    initialized_tiles = pool.map(initialize_tile, tiles)
 
-                # clean up
-                _print("freeing `swope_tiles`...")
-                del swope_tiles
+                _print("freeing `tiles`...")
+                del tiles
                 t2 = time.time()
 
                 _print("\n********* start DEBUG ***********")
-                _print("Swope Tile initialization execution time: %s" % (t2 - t1))
+                _print("%s Tile initialization execution time: %s" % (det_name, (t2 - t1)))
                 _print("********* end DEBUG ***********\n")
 
-                # Insert Tile/Healpix pixel relations
-                for t in initialized_swope_tiles:
+                # Insert Tile/Healpix pixel relations for this detector
+                tile_pixel_data = []
+                for t in initialized_tiles:
                     for p in t.enclosed_pixel_indices:
                         if p in map_pixel_dict:
                             tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
 
-                # Create CSV
-                try:
-                    t1 = time.time()
-                    _print("Appending `%s`" % tile_pixel_upload_csv)
-                    with open(tile_pixel_upload_csv, 'a') as csvfile:
-                        csvwriter = csv.writer(csvfile)
-                        for data in tile_pixel_data:
-                            csvwriter.writerow(data)
-
-                    t2 = time.time()
-                    _print("\n********* start DEBUG ***********")
-                    _print("Tile-Pixel CSV creation execution time: %s" % (t2 - t1))
-                    _print("********* end DEBUG ***********\n")
-                except Error as e:
-                    _print("Error in creating Tile-Pixel CSV:\n")
-                    _print(e)
-                    _print("\nExiting")
-                    return 1
-
-                # clean up
-                _print("freeing `tile_pixel_data`...")
-                del tile_pixel_data
-
-            tile_pixel_data = []
-            if not skip_thacher:
-                ##### DO THACHER ######
-                # Get detector -> static tile rows
-                thacher_detector_result = query_db([select_detector % "THACHER"])[0][0]
-                thacher_id = thacher_detector_result[0]
-                thacher_name = thacher_detector_result[1]
-                thacher_poly = thacher_detector_result[2]
-                thacher_detector_vertices = Detector.get_detector_vertices_from_teglon_db(thacher_poly)
-                thacher_detector = Detector(thacher_name, thacher_detector_vertices, detector_id=thacher_id)
-                thacher_static_tile_rows = query_db([tile_select % thacher_id])[0]
-
-                thacher_tiles = []
-                for r in thacher_static_tile_rows:
-                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=thacher_detector,
-                             nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
-                    thacher_tiles.append(t)
-
-                # clean up
-                _print("freeing `thacher_static_tile_rows`...")
-                del thacher_static_tile_rows
-
-                t1 = time.time()
-                initialized_thacher_tiles = None
-                # with mp.Pool() as pool:
-                with Pool() as pool:
-                    initialized_thacher_tiles = pool.map(initialize_tile, thacher_tiles)
-
-                # clean up
-                _print("freeing `thacher_tiles`...")
-                del thacher_tiles
-                t2 = time.time()
-
-                _print("\n********* start DEBUG ***********")
-                _print("Thacher Tile initialization execution time: %s" % (t2 - t1))
-                _print("********* end DEBUG ***********\n")
-
-                # Insert Tile/Healpix pixel relations
-                for t in initialized_thacher_tiles:
-                    for p in t.enclosed_pixel_indices:
-                        if p in map_pixel_dict:
-                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
-
-                # Append to existing CSV, upload, and clean up CSV
+                # Append this detector's rows to the shared upload CSV
                 try:
                     t1 = time.time()
                     _print("Appending `%s`" % tile_pixel_upload_csv)
@@ -1967,131 +1922,6 @@ class Teglon:
                     _print(e)
                     _print("\nExiting")
                     return 1
-
-            tile_pixel_data = []
-            if not skip_t80:
-                ##### DO T80 ######
-                # Get detector -> static tile rows
-                t80_detector_result = query_db([select_detector % "T80S_T80S-Cam"])[0][0]
-                t80_id = t80_detector_result[0]
-                t80_name = t80_detector_result[1]
-                t80_poly = t80_detector_result[2]
-                t80_detector_vertices = Detector.get_detector_vertices_from_teglon_db(t80_poly)
-                t80_detector = Detector(t80_name, t80_detector_vertices, detector_id=t80_id)
-                t80_static_tile_rows = query_db([tile_select % t80_id])[0]
-
-                t80_tiles = []
-                for r in t80_static_tile_rows:
-                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=t80_detector,
-                             nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
-                    t80_tiles.append(t)
-
-                # clean up
-                _print("freeing `t80_static_tile_rows`...")
-                del t80_static_tile_rows
-
-                t1 = time.time()
-                initialized_t80_tiles = None
-                # with mp.Pool() as pool:
-                with Pool() as pool:
-                    initialized_t80_tiles = pool.map(initialize_tile, t80_tiles)
-
-                # clean up
-                _print("freeing `t80_tiles`...")
-                del t80_tiles
-                t2 = time.time()
-
-                _print("\n********* start DEBUG ***********")
-                _print("T80 Tile initialization execution time: %s" % (t2 - t1))
-                _print("********* end DEBUG ***********\n")
-
-                # Insert Tile/Healpix pixel relations
-                for t in initialized_t80_tiles:
-                    for p in t.enclosed_pixel_indices:
-                        if p in map_pixel_dict:
-                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
-
-                # Append to existing CSV, upload, and clean up CSV
-                try:
-                    t1 = time.time()
-                    _print("Appending `%s`" % tile_pixel_upload_csv)
-                    with open(tile_pixel_upload_csv, 'a') as csvfile:
-                        csvwriter = csv.writer(csvfile)
-                        for data in tile_pixel_data:
-                            csvwriter.writerow(data)
-
-                    t2 = time.time()
-                    _print("\n********* start DEBUG ***********")
-                    _print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
-                    _print("********* end DEBUG ***********\n")
-                except Error as e:
-                    _print("Error in creating Tile-Pixel CSV:\n")
-                    _print(e)
-                    _print("\nExiting")
-                    return 1
-
-            tile_pixel_data = []
-            if not skip_newfirm:
-                ##### DO NEWFIRM ######
-                # Get detector -> static tile rows
-                newfirm_detector_result = query_db([select_detector % "NEWFIRM"])[0][0]
-                newfirm_id = newfirm_detector_result[0]
-                newfirm_name = newfirm_detector_result[1]
-                newfirm_poly = newfirm_detector_result[2]
-                newfirm_detector_vertices = Detector.get_detector_vertices_from_teglon_db(newfirm_poly)
-                newfirm_detector = Detector(newfirm_name, newfirm_detector_vertices, detector_id=newfirm_id)
-                newfirm_static_tile_rows = query_db([tile_select % newfirm_id])[0]
-
-                newfirm_tiles = []
-                for r in newfirm_static_tile_rows:
-                    t = Tile(central_ra_deg=float(r[3]), central_dec_deg=float(r[4]), detector=newfirm_detector,
-                             nside=map_nside, tile_id=int(r[0]), tile_mwe=float(r[7]))
-                    newfirm_tiles.append(t)
-
-                # clean up
-                _print("freeing `newfirm_static_tile_rows`...")
-                del newfirm_static_tile_rows
-
-                t1 = time.time()
-                initialized_newfirm_tiles = None
-                # with mp.Pool() as pool:
-                with Pool() as pool:
-                    initialized_newfirm_tiles = pool.map(initialize_tile, newfirm_tiles)
-
-                # clean up
-                _print("freeing `newfirm_tiles`...")
-                del newfirm_tiles
-                t2 = time.time()
-
-                _print("\n********* start DEBUG ***********")
-                _print("NEWFIRM Tile initialization execution time: %s" % (t2 - t1))
-                _print("********* end DEBUG ***********\n")
-
-                # Insert Tile/Healpix pixel relations
-                for t in initialized_newfirm_tiles:
-                    for p in t.enclosed_pixel_indices:
-                        if p in map_pixel_dict:
-                            tile_pixel_data.append((t.id, map_pixel_dict[p][0], healpix_map_id))
-
-                # Append to existing CSV, upload, and clean up CSV
-                try:
-                    t1 = time.time()
-                    _print("Appending `%s`" % tile_pixel_upload_csv)
-                    with open(tile_pixel_upload_csv, 'a') as csvfile:
-                        csvwriter = csv.writer(csvfile)
-                        for data in tile_pixel_data:
-                            csvwriter.writerow(data)
-
-                    t2 = time.time()
-                    _print("\n********* start DEBUG ***********")
-                    _print("Tile-Pixel CSV append execution time: %s" % (t2 - t1))
-                    _print("********* end DEBUG ***********\n")
-                except Error as e:
-                    _print("Error in creating Tile-Pixel CSV:\n")
-                    _print(e)
-                    _print("\nExiting")
-                    return 1
-
         if build_tile_pixel_relation:
             _print("Bulk uploading Tile-Pixel...")
             t1 = time.time()
