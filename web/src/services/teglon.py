@@ -911,9 +911,11 @@ class Teglon:
             is_error = True
             _print("Invalid band selection. Available bands: %s" % band_mapping.keys())
     
-        if tele not in detector_mapping:
+        # `tele` may be a short flag (detector_mapping) or an exact detector Name;
+        # an unknown name is skipped (with a message) at plot time below.
+        if tele == "":
             is_error = True
-            _print("Invalid telescope selection. Available telescopes: %s" % detector_mapping.keys())
+            _print("Telescope selection is required.")
     
         if is_error:
             _print("\n\nErrors! See above output.")
@@ -941,7 +943,7 @@ class Teglon:
                         GWID=gw_id, TELE_NAME=detect_val
                     ))
         else:
-            tile_files[detector_mapping[tele]] = "%s/%s" % (formatted_healpix_dir, tile_file)
+            tile_files[detector_mapping.get(tele, tele)] = "%s/%s" % (formatted_healpix_dir, tile_file)
     
         # Create canvas
         plot_axes = {}
@@ -964,7 +966,7 @@ class Teglon:
         else:
             fig, ax = plt.subplots(1, 1, subplot_kw={'projection': 'astro hours mollweide'})
             ax.grid()
-            plot_axes[detector_mapping[tele]] = ax
+            plot_axes[detector_mapping.get(tele, tele)] = ax
     
         # Generate all plottable assets
         healpix_map_select = "SELECT id, RescaledNSIDE, t_0 FROM HealpixMap WHERE GWID = '%s' and Filename = '%s'"
@@ -1126,7 +1128,11 @@ class Teglon:
     
             plot_ax = plot_axes[detector_name]
     
-            detector_result = query_db([detector_select_by_name % detector_name])[0][0]
+            detector_lookup = query_db([detector_select_by_name % detector_name])[0]
+            if len(detector_lookup) == 0:
+                _print("Skipping unknown telescope `%s` (not found in the Detector table)." % detector_name)
+                continue
+            detector_result = detector_lookup[0]
             detector_id = int(detector_result[0])
             detector_name = detector_result[1]
             detector_poly = detector_result[8]
