@@ -536,7 +536,8 @@ class Teglon:
 
             hdul = fits.open(healpix_file_path)
             hdr = hdul[1].header
-            del hdr['HISTORY']
+            if 'HISTORY' in hdr:  # tolerate a FITS with no HISTORY card (e.g. healpy-written maps)
+                del hdr['HISTORY']
             hdr_dict = dict(hdr)
             output_table.meta['keywords'] = OrderedDict(hdr_dict)
 
