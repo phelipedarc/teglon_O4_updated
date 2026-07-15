@@ -46,7 +46,8 @@ def credible_area_sqdeg(prob, nside, level):
     """Area (sq deg) of the smallest region containing `level` fraction of the
     probability. `prob` is normalized to unit total first so the result is a
     physically consistent credible region regardless of the map's absolute scale."""
-    p = normalize(prob)
+    #p = normalize(prob) it shouldnt normalize teglon only ingest the 90% by definition
+    p = np.asarray(prob, dtype=float)
     order = np.flipud(np.argsort(p))
     cum = np.cumsum(p[order])
     cred = np.empty_like(cum)
