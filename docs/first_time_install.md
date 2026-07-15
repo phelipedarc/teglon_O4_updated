@@ -149,8 +149,4 @@ All-in-one planning pipeline (load → extract → plot) is also available:
   `DB_CONTAINER_NAME`, and `COMPOSE_PROJECT_NAME` in `docker/.env`.
 
 ### What was verified
-The entire flow (steps 1–7) was run end-to-end from a fresh `git clone` of the
-fork: the full `setup --run` completed (GLADE + all `initialize_teglon` stages +
-pickles) in ~60 min with no hang, and five benchmark events ran successfully
-(GW ID → reweighted skymap in ~2–4 min, incl. GW170817 via the GWOSC fallback).
 See the [benchmark report](benchmark_report.md).
