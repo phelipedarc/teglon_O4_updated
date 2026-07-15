@@ -1141,6 +1141,8 @@ class Teglon:
             detector_vertices = Detector.get_detector_vertices_from_teglon_db(detector_poly)
     
             detector_obj = Detector(detector_name, detector_vertices, detector_id=detector_id)
+            if not os.path.exists(tile_file):
+                continue
             tiles = Table.read(tile_file, format='ascii.ecsv')
             tiles_to_plot = [Tile(ra, dec, detector=detector_obj, nside=healpix_map_nside,
                                   net_prob=prob) for ra, dec, prob in zip(tiles["RA"], tiles["Dec"], tiles["Prob"])]
