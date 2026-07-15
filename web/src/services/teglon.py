@@ -449,9 +449,11 @@ class Teglon:
             # DB/TM-driven: every detector with a static grid (Treasure-Map ones
             # first) plus the galaxy-based NICKEL. default_settings supplies each
             # detector's default band, falling back to the requested --band.
-            tileable_names_select = ("SELECT DISTINCT d.Name FROM Detector d "
-                                     "JOIN StaticTile st ON st.Detector_id = d.id "
-                                     "ORDER BY (d.TM_id IS NOT NULL) DESC, d.id;")
+            tileable_names_select = """
+                SELECT DISTINCT d.Name, (d.TM_id IS NOT NULL) AS has_tm, d.id
+                FROM Detector d JOIN StaticTile st ON st.Detector_id = d.id
+                ORDER BY has_tm DESC, d.id;
+            """
             all_detector_names = [row[0] for row in query_db([tileable_names_select])[0]]
             if "NICKEL" not in all_detector_names:
                 all_detector_names.append("NICKEL")
@@ -1880,9 +1882,11 @@ class Teglon:
             if skip_newfirm:
                 skipped_detector_names.add("NEWFIRM")
 
-            tileable_detector_select = ("SELECT DISTINCT d.id, d.Name, ST_AsText(d.Poly) "
-                                        "FROM Detector d JOIN StaticTile st ON st.Detector_id = d.id "
-                                        "ORDER BY (d.TM_id IS NOT NULL) DESC, d.id;")
+            tileable_detector_select = """
+                SELECT DISTINCT d.id, d.Name, ST_AsText(d.Poly), (d.TM_id IS NOT NULL) AS has_tm
+                FROM Detector d JOIN StaticTile st ON st.Detector_id = d.id
+                ORDER BY has_tm DESC, d.id;
+            """
             tileable_detectors = query_db([tileable_detector_select])[0]
 
             for detector_row in tileable_detectors:
