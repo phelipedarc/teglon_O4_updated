@@ -123,8 +123,8 @@ def main():
     # Each map is normalized to unit total over its own pixel set; the 2D area is
     # the published localization (full resolution), the 4D area is the Teglon
     # galaxy-reweighted product (analysis resolution).
-    map_2d = normalize(map_2d)
-    map_4d = normalize(map_4d)
+    # map_2d = normalize(map_2d)
+    # map_4d = normalize(map_4d)
 
     a2_90 = credible_area_sqdeg(map_2d, nside_2d, 0.90)
     a2_50 = credible_area_sqdeg(map_2d, nside_2d, 0.50)
